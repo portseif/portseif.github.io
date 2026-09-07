@@ -37,6 +37,9 @@
   --glass: rgba(252, 252, 251, 0.7);
   --glass-filter: blur(40px) contrast(0.45) brightness(1.4) saturate(180%);
   --glass-edge: rgba(23, 24, 26, 0.1);
+  /* Fill for grouped cards sitting on the panel's glass. A tint, not a second
+     translucent material: stacking two of those is where legibility goes. */
+  --card-fill: rgba(23, 24, 26, 0.04);
   --panel-shadow: rgba(23, 24, 26, 0.2);
   --scrim: rgba(23, 24, 26, 0.26);
 
@@ -83,6 +86,7 @@
     --glass: rgba(24, 25, 28, 0.55);
     --glass-filter: blur(40px) brightness(0.4) saturate(180%);
     --glass-edge: rgba(255, 255, 255, 0.12);
+    --card-fill: rgba(255, 255, 255, 0.05);
     --panel-shadow: rgba(0, 0, 0, 0.6);
     --scrim: rgba(0, 0, 0, 0.45);
 
@@ -920,14 +924,21 @@ body {
 
 }
 
-.release + .release { margin-top: 2rem; }
+/* Releases read as an inset grouped list, the shape this content has on Apple's
+   own platforms: version and date are the section header, and the notes are
+   rows in a card under it rather than a loose run of dashes. */
+.release + .release { margin-top: 1.75rem; }
 
 .release-version {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
+  justify-content: space-between;
   gap: 0.625rem;
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.5rem;
+  /* Padded to the card's text column, so the version sits over the first
+     character of the rows and the date lands on their right edge. */
+  padding: 0 0.875rem;
   font-size: 0.9375rem;
   font-weight: 620;
 }
@@ -936,13 +947,45 @@ body {
   color: var(--text-muted);
   font-size: 0.8125rem;
   font-weight: 400;
+  letter-spacing: 0.01em; /* small text: a touch of positive tracking */
 }
 
 .release .notes {
   margin: 0;
   padding: 0;
   border-top: 0;
+  border-radius: var(--radius);
+  background: var(--card-fill);
   max-width: none;
+  overflow: hidden;
+}
+
+/* Rows, not bullets. The card does the grouping the dash was doing, and the
+   text takes the primary label colour: flat grey over a translucent surface is
+   where vibrancy fails, so contrast and weight both come up a step. */
+.release .notes li {
+  padding: 0.5625rem 0.875rem;
+  color: var(--text);
+  font-weight: 420;
+  line-height: 1.45; /* dense list: tighter leading than body copy */
+  letter-spacing: 0.005em;
+}
+
+.release .notes li::before {
+  display: none;
+}
+
+.release .notes li + li {
+  margin-top: 0;
+}
+
+/* Separator inset from the leading edge, the way a grouped list divides rows. */
+.release .notes li + li::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0.875rem;
+  height: 1px;
+  background: var(--hairline);
 }
 
 .changelog-skeleton { display: grid; gap: 0.875rem; }
