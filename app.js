@@ -220,7 +220,7 @@ function buildProjectEntry(project, index) {
             .join("")}
         </dl>
         <p class="actions">
-          <a class="download" href="${escapeHtml(project.downloadUrl)}">${DOWNLOAD_ICON}Download</a>
+          <a class="download" href="${escapeHtml(project.downloadUrl)}">Download${DOWNLOAD_ICON}</a>
           <button class="secondary" type="button" data-changelog="${escapeHtml(project.name)}">Full changelog</button>
           <a class="secondary" href="${escapeHtml(project.repoUrl)}"
              target="_blank" rel="noopener noreferrer">Repository</a>
