@@ -40,6 +40,7 @@
   /* Fill for grouped cards sitting on the panel's glass. A tint, not a second
      translucent material: stacking two of those is where legibility goes. */
   --card-fill: rgba(23, 24, 26, 0.04);
+  --accent-glow: rgba(0, 113, 227, 0.45);
   --panel-shadow: rgba(23, 24, 26, 0.2);
   --scrim: rgba(23, 24, 26, 0.26);
 
@@ -87,6 +88,7 @@
     --glass-filter: blur(40px) brightness(0.4) saturate(180%);
     --glass-edge: rgba(255, 255, 255, 0.12);
     --card-fill: rgba(255, 255, 255, 0.05);
+    --accent-glow: rgba(10, 132, 255, 0.55);
     --panel-shadow: rgba(0, 0, 0, 0.6);
     --scrim: rgba(0, 0, 0, 0.45);
 
@@ -234,20 +236,35 @@ body {
 
 /* The page title frames the list; the app names below it stay larger, because
    the apps are what visitors came for. */
+/* Accent on a line of text, not just on the button. It is small and it labels
+   the page, so it gets positive tracking rather than the negative kind the
+   display line below it wants. */
+.eyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--accent-fill);
+  font-size: 0.9375rem;
+  font-weight: 620;
+  letter-spacing: 0.005em;
+}
+
+/* Display type: leading and tracking both tighten as the size grows, which is
+   the whole reason this is not just the body size scaled up. */
 .page-title {
   margin: 0;
-  font-size: 1.5rem;
-  line-height: 1.2;
-  letter-spacing: -0.018em;
-  font-weight: 620;
+  max-width: 18ch;
+  font-size: clamp(2.5rem, 1.25rem + 3.6vw, 4.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  font-weight: 700;
 }
 
 .lede {
-  margin: 0.375rem 0 4rem;
+  margin: 1.25rem 0 5.5rem;
   max-width: 46ch;
   color: var(--text-body);
-  font-size: 1.0625rem;
-  line-height: 1.55;
+  font-size: 1.25rem;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
 }
 
 /* --- App entries.
@@ -270,10 +287,11 @@ body {
   padding-top: 5rem;
 }
 
+/* The icon sits above the name rather than beside it, so the whole entry reads
+   as one column: mark, name, blurb, actions, spec. */
 .project-info {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 /* The container is wide enough for a split entry. An entry without a
@@ -282,22 +300,16 @@ body {
   max-width: 50rem;
 }
 
-@media (min-width: 600px) {
-  .project-info {
-    grid-template-columns: 5.5rem minmax(0, 1fr);
-    gap: 2rem;
-  }
-}
-
 @media (min-width: 980px) {
+  /* Details beside the shot, and what is new underneath both of them. */
   .project.with-screenshot {
     grid-template-columns: minmax(0, 31rem) minmax(0, 1fr);
     grid-template-areas:
       "info shot"
-      "notes shot";
+      "new  new";
     align-items: start;
     column-gap: 3.5rem;
-    row-gap: 2.25rem;
+    row-gap: 4rem;
   }
 
   .project.with-screenshot .project-info {
@@ -306,23 +318,8 @@ body {
   .project.with-screenshot .project-shot {
     grid-area: shot;
   }
-  .project.with-screenshot .notes {
-    grid-area: notes;
-  }
-
-  /* The details column is narrower here, so the icon steps back and the spec
-     row tightens to keep both on one line. */
-  .project.with-screenshot .project-info {
-    grid-template-columns: 4.5rem minmax(0, 1fr);
-    gap: 1rem;
-  }
-
-  .project.with-screenshot .project-icon {
-    width: 4.5rem;
-    height: 4.5rem;
-  }
-  .project.with-screenshot .spec {
-    gap: 0.25rem 1.75rem;
+  .project.with-screenshot .whats-new {
+    grid-area: new;
   }
 }
 
@@ -379,38 +376,91 @@ body {
 /* Display type: tight leading and negative tracking, both scaling with size. */
 .project-name {
   margin: 0;
-  font-size: clamp(1.875rem, 1.4rem + 1.6vw, 2.5rem);
-  line-height: 1.08;
-  letter-spacing: -0.026em;
-  font-weight: 660;
+  font-size: clamp(2.25rem, 1.6rem + 1.8vw, 2.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 680;
+}
+
+.project-body {
+  display: grid;
+  justify-items: start;
 }
 
 .project-description {
-  margin: 0.5rem 0 0;
+  margin: 0.625rem 0 0;
   max-width: var(--measure);
   color: var(--text-body);
   font-size: 1.0625rem;
+  line-height: 1.5;
 }
 
-/* --- Spec pairs. Replaces a middle-dot metadata string. --- */
+/* --- Spec card. A grouped list of label/value rows rather than a metadata
+       strip, so the numbers line up on the right and read as a table. --- */
 .spec {
+  width: 100%;
+  margin: 2rem 0 0;
+  border-radius: var(--radius);
+  background: var(--card-fill);
+  overflow: hidden;
+}
+
+.spec-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 2.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.6875rem 0.9375rem;
+}
+
+.spec-row + .spec-row {
+  position: relative;
+}
+
+.spec-row + .spec-row::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0.9375rem;
+  height: 1px;
+  background: var(--hairline);
 }
 
 .spec dt {
-  font-size: 0.75rem;
-  letter-spacing: 0.01em; /* small text: a touch of positive tracking */
-  color: var(--text-muted);
+  color: var(--text-body);
+  font-size: 0.9375rem;
+  letter-spacing: 0.005em;
 }
 
 .spec dd {
-  margin: 0.1875rem 0 0;
-  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
-  font-size: 0.8125rem;
-  font-variant-numeric: tabular-nums;
+  margin: 0;
   color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.005em;
+}
+
+/* The repository row behaves like a list row that goes somewhere. */
+.spec-link {
+  padding: 0;
+}
+
+.spec-link a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.6875rem 0.9375rem;
+  color: var(--accent-fill);
+  font-size: 0.9375rem;
+  font-weight: 560;
+  text-decoration: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .spec-link a:hover {
+    background: var(--card-fill);
+  }
 }
 
 /* --- Actions --- */
@@ -418,9 +468,52 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem 1.75rem;
-  margin-top: 2rem;
+  gap: 0.75rem 1.5rem;
+  margin: 2rem 0 0;
   font-size: 0.9375rem;
+}
+
+/* A text link that goes somewhere, with the glyph that says so. The chevron
+   leans into the direction of travel on hover, which is the only movement the
+   link makes. */
+.link-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-fill);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 560;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.chevron,
+.arrow-out {
+  flex: none;
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+
+.link-arrow .chevron,
+.link-arrow .arrow-out {
+  transition: transform 160ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link-arrow:hover .chevron {
+    transform: translateX(2px);
+  }
+  .link-arrow:hover .arrow-out {
+    transform: translate(1px, -1px);
+  }
+}
+
+.link-arrow:active {
+  transform: scale(0.97);
 }
 
 /* Modeled on the Catalyst solid button (catalyst.tailwindui.com/docs/button).
@@ -454,8 +547,8 @@ body {
 /* Catalyst steps the button down to its compact size at the sm breakpoint. */
 @media (min-width: 40rem) {
   .download {
-    padding: calc(0.375rem - 1px) calc(0.75rem - 1px);
-    font-size: 0.875rem;
+    padding: calc(0.6875rem - 1px) calc(1.25rem - 1px);
+    font-size: 0.9375rem;
   }
 }
 
@@ -470,9 +563,22 @@ body {
 
 .download::before {
   background: var(--accent-fill);
+  /* The neutral drop shadow that grounds it, plus a wide accent bloom: the one
+     coloured control on the page also throws a little of that colour. */
   box-shadow:
     0 1px 3px 0 rgba(0, 0, 0, 0.1),
-    0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    0 1px 2px -1px rgba(0, 0, 0, 0.1),
+    0 8px 32px -8px var(--accent-glow);
+  transition: box-shadow 240ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .download:hover::before {
+    box-shadow:
+      0 1px 3px 0 rgba(0, 0, 0, 0.1),
+      0 1px 2px -1px rgba(0, 0, 0, 0.1),
+      0 10px 40px -8px var(--accent-glow);
+  }
 }
 
 .download::after {
@@ -535,25 +641,100 @@ body {
   }
 }
 
-/* --- Release notes. A single hairline above the group, not a box and not
-       a rule under every row. --- */
-.notes {
-  margin: 0;
-  padding: 1.5rem 0 0;
-  border-top: 1px solid var(--rule);
-  list-style: none;
-  max-width: var(--measure);
+/* --- What's new. The newest release, split into what arrived and what got
+       repaired, as two grouped cards. --- */
+.whats-new {
+  display: grid;
+  gap: 1.5rem;
 }
 
-.notes li {
-  position: relative;
-  padding-left: 1.125rem;
-  color: var(--text-body);
+.whats-new-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+
+.whats-new-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 1.2rem + 1vw, 1.875rem);
+  line-height: 1.15;
+  letter-spacing: -0.022em;
+  font-weight: 660;
+}
+
+.whats-new-date {
+  margin: 0.375rem 0 0;
+  color: var(--text-muted);
   font-size: 0.9375rem;
 }
 
-.notes li + li {
-  margin-top: 0.5rem;
+.whats-new-columns {
+  display: grid;
+  gap: 1.5rem 2rem;
+  align-items: start;
+}
+
+@media (min-width: 800px) {
+  .whats-new-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Section label above the card, the way a grouped list names its group. Small
+   caps-height text, so it takes positive tracking. */
+.whats-new-label {
+  margin: 0 0 0.5rem;
+  padding-left: 0.9375rem;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 620;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.note-card {
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius);
+  background: var(--card-fill);
+  list-style: none;
+  overflow: hidden;
+}
+
+.note-card li {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.75rem 0.9375rem;
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 420;
+  line-height: 1.45;
+  letter-spacing: 0.005em;
+}
+
+.note-card li + li::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0.9375rem;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.note-icon {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.155rem; /* optical: sets the glyph on the first line's x-height */
+  color: var(--text-muted);
+}
+
+/* --- Release notes, which now live only in the changelog panel. --- */
+.notes {
+  list-style: none;
 }
 
 @media (max-width: 599px) {
@@ -562,14 +743,26 @@ body {
   }
 }
 
-.notes li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.72em;
-  width: 5px;
-  height: 1px;
-  background: var(--text-muted);
+/* --- Site footer. A hairline, a line of small print, and the same links the
+       header carries. --- */
+.site-foot {
+  border-top: 1px solid var(--rule);
+}
+
+.site-foot-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem;
+}
+
+.site-foot small {
+  color: var(--text-muted);
+  font-size: 0.875rem;
 }
 
 /* --- Loading, empty and error states --- */
@@ -645,28 +838,27 @@ body {
 
 .changelog {
   position: fixed;
-  inset: 0 0 0 auto;
+  inset: 0.75rem 0.75rem 0.75rem auto;
   display: flex;
   flex-direction: column;
-  width: min(34rem, 100vw);
+  width: min(30rem, calc(100vw - 1.5rem));
   max-width: none;
   max-height: none;
   height: auto;
   padding: 0;
-  /* Flush to the window, so the only edge that exists is the one facing the
-     page. No radius for the same reason: there is no corner to round. */
-  border: 0;
-  border-left: 1px solid var(--glass-edge);
-  border-radius: 0;
+  /* A pane floating over the page rather than welded to the window, so it gets
+     an edge and a corner on every side. */
+  border: 1px solid var(--glass-edge);
+  border-radius: 1rem;
   background: var(--glass);
   backdrop-filter: var(--glass-filter);
   -webkit-backdrop-filter: var(--glass-filter);
-  box-shadow: -24px 0 64px -24px var(--panel-shadow);
+  box-shadow: 0 24px 64px -24px var(--panel-shadow);
   color: var(--text);
   overflow: hidden;
 
   /* Closed state doubles as the exit transition. */
-  transform: translateX(100%);
+  transform: translateX(calc(100% + 0.75rem));
   opacity: 0;
   transition:
     transform 260ms var(--ease-out),
@@ -703,7 +895,7 @@ body {
 
 @starting-style {
   .changelog[open] {
-    transform: translateX(100%);
+    transform: translateX(calc(100% + 0.75rem));
     opacity: 0;
   }
 }
@@ -728,6 +920,24 @@ body {
   justify-content: space-between;
   gap: 1rem;
   padding: 1.125rem 1.375rem;
+}
+
+/* The title sits over its own caption, so the head aligns to the top of the
+   pair rather than centring on the taller block. */
+.changelog-head {
+  align-items: flex-start;
+}
+
+.changelog-subtitle {
+  margin: 0.1875rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.changelog-latest {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
 }
 
 /* No rules under the head or over the foot. Content fades into the floating
@@ -964,19 +1174,12 @@ body {
    text takes the primary label colour: flat grey over a translucent surface is
    where vibrancy fails, so contrast and weight both come up a step. */
 .release .notes li {
+  position: relative;
   padding: 0.5625rem 0.875rem;
   color: var(--text);
   font-weight: 420;
   line-height: 1.45; /* dense list: tighter leading than body copy */
   letter-spacing: 0.005em;
-}
-
-.release .notes li::before {
-  display: none;
-}
-
-.release .notes li + li {
-  margin-top: 0;
 }
 
 /* Separator inset from the leading edge, the way a grouped list divides rows. */
@@ -990,10 +1193,7 @@ body {
 
 .changelog-skeleton { display: grid; gap: 0.875rem; }
 
-/* At full width there is no page beside the panel, so the edge goes too. */
-@media (max-width: 34rem) {
-  .changelog { border-left: 0; }
-}
+
 
 /* --- Scrollbars. The pill and nothing under it, on the page and in the panel
        alike. A track would draw a second vertical line down surfaces whose

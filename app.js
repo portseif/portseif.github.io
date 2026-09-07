@@ -28,6 +28,30 @@ const DOWNLOAD_ICON = `
     </g>
   </svg>`;
 
+const CHEVRON_ICON = `
+  <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="m9 5 7 7-7 7" />
+  </svg>`;
+
+const ARROW_OUT_ICON = `
+  <svg class="arrow-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="M7 17 17 7M9 7h8v8" />
+  </svg>`;
+
+const PLUS_ICON = `
+  <svg class="note-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="M12 5v14M5 12h14" />
+  </svg>`;
+
+const WRENCH_ICON = `
+  <svg class="note-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="M14.7 6.3a4 4 0 0 0 5 5l-9.4 9.4a2.1 2.1 0 0 1-3-3l9.4-9.4a4 4 0 0 0-5-5l3 3-2 2-3-3a4 4 0 0 1 5-1z" />
+  </svg>`;
+
 const listElement = document.getElementById("project-list");
 
 main();
@@ -214,17 +238,25 @@ function buildProjectEntry(project, index) {
             ? `<p class="project-description">${escapeHtml(project.description)}</p>`
             : ""
         }
+        <p class="actions">
+          <a class="download" href="${escapeHtml(project.downloadUrl)}">${DOWNLOAD_ICON}Download for macOS</a>
+          <button class="link-arrow" type="button" data-changelog="${escapeHtml(project.name)}">
+            Full changelog${CHEVRON_ICON}
+          </button>
+        </p>
         <dl class="spec">
           ${specs
-            .map(([label, value]) => `<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`)
+            .map(
+              ([label, value]) =>
+                `<div class="spec-row"><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`
+            )
             .join("")}
+          <div class="spec-row spec-link">
+            <a href="${escapeHtml(project.repoUrl)}" target="_blank" rel="noopener noreferrer">
+              Repository${ARROW_OUT_ICON}
+            </a>
+          </div>
         </dl>
-        <p class="actions">
-          <a class="download" href="${escapeHtml(project.downloadUrl)}">Download${DOWNLOAD_ICON}</a>
-          <button class="secondary" type="button" data-changelog="${escapeHtml(project.name)}">Full changelog</button>
-          <a class="secondary" href="${escapeHtml(project.repoUrl)}"
-             target="_blank" rel="noopener noreferrer">Repository</a>
-        </p>
       </div>
     </div>
     ${
@@ -240,15 +272,67 @@ function buildProjectEntry(project, index) {
            </figure>`
         : ""
     }
-    ${
-      project.releaseNotes.length
-        ? `<ul class="notes">${project.releaseNotes
-            .map((note) => `<li>${escapeHtml(note)}</li>`)
-            .join("")}</ul>`
-        : ""
-    }`;
+    ${renderWhatsNew(project)}`;
 
   return entry;
+}
+
+// The changelog is one flat list of bullets, but a release reads better split
+// into what arrived and what got repaired. There is no category in the source,
+// so it comes from the opening verb: anything that starts by repairing,
+// removing or restraining goes to the right, everything else is new work.
+const REPAIR_VERBS =
+  /^(fix|remove|cap|drop|stop|prevent|correct|quiet|speed|tidy|clean|restore|revert|gate|harden|reduce|avoid|guard|no longer|resolve)\b/i;
+
+function splitReleaseNotes(notes) {
+  const added = [];
+  const fixed = [];
+  for (const note of notes) (REPAIR_VERBS.test(note) ? fixed : added).push(note);
+  return { added, fixed };
+}
+
+function renderWhatsNew(project) {
+  if (!project.releaseNotes.length) return "";
+
+  const { added, fixed } = splitReleaseNotes(project.releaseNotes);
+  const column = (label, notes, icon) =>
+    notes.length
+      ? `<section class="whats-new-group">
+           <h4 class="whats-new-label">${label}</h4>
+           <ul class="note-card">
+             ${notes.map((note) => `<li>${icon}<span>${escapeHtml(note)}</span></li>`).join("")}
+           </ul>
+         </section>`
+      : "";
+
+  return `
+    <section class="whats-new">
+      <header class="whats-new-head">
+        <div>
+          <h3 class="whats-new-title">What's new${
+            project.version ? ` in ${escapeHtml(project.version)}` : ""
+          }</h3>
+          ${
+            project.hasPublishedDate
+              ? `<p class="whats-new-date">Released ${escapeHtml(
+                  project.releasedAt.toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })
+                )}</p>`
+              : ""
+          }
+        </div>
+        <button class="link-arrow" type="button" data-changelog="${escapeHtml(project.name)}">
+          Full changelog${CHEVRON_ICON}
+        </button>
+      </header>
+      <div class="whats-new-columns">
+        ${column("Added", added, PLUS_ICON)}
+        ${column("Fixed &amp; tidied", fixed, WRENCH_ICON)}
+      </div>
+    </section>`;
 }
 
 // Tries each candidate URL in order and resolves with the first that actually
@@ -307,6 +391,7 @@ const changelogDialog = document.getElementById("changelog");
 const changelogTitle = document.getElementById("changelog-title");
 const changelogBody = document.getElementById("changelog-body");
 const changelogSource = document.getElementById("changelog-source");
+const changelogLatest = document.getElementById("changelog-latest");
 const changelogCache = new Map();
 
 let projectsByName = new Map();
@@ -354,6 +439,7 @@ async function openChangelog(projectName, trigger) {
   elementThatOpenedPanel = trigger;
   changelogTitle.textContent = `${project.name} changelog`;
   changelogSource.href = project.changelogUrl;
+  changelogLatest.textContent = project.version ? `Latest ${project.version}` : "";
   document.documentElement.classList.add("panel-open");
   changelogDialog.showModal();
   changelogBody.scrollTop = 0;
@@ -396,8 +482,10 @@ function parseChangelog(markdown) {
     const heading = line.match(/^###\s+(.*)$/);
     if (heading) {
       const withDate = heading[1].match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+      const label = (withDate ? withDate[1] : heading[1]).trim();
       releases.push({
-        label: (withDate ? withDate[1] : heading[1]).trim(),
+        // Headings are written "v1.1.9"; the number alone is the version.
+        label: label.replace(/^v(?=\d)/i, ""),
         date: withDate ? withDate[2].trim() : "",
         notes: [],
       });
@@ -410,6 +498,19 @@ function parseChangelog(markdown) {
 }
 
 const EDGE_FADE_MAX = 24;
+
+// Headings carry whatever the CHANGELOG author typed. Anything a Date can read
+// gets the same short form the entry above uses; anything else passes through
+// untouched rather than being replaced with "Invalid Date".
+function formatReleaseDate(raw) {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 function updateChangelogEdges() {
   const { scrollTop, scrollHeight, clientHeight } = changelogBody;
@@ -425,7 +526,11 @@ function renderChangelog(releases) {
         <section class="release">
           <h3 class="release-version">
             ${escapeHtml(release.label)}
-            ${release.date ? `<span class="release-date">${escapeHtml(release.date)}</span>` : ""}
+            ${
+              release.date
+                ? `<span class="release-date">${escapeHtml(formatReleaseDate(release.date))}</span>`
+                : ""
+            }
           </h3>
           <ul class="notes">
             ${release.notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}

@@ -29,7 +29,8 @@
 </header>
 
 <main class="page">
-  <h1 class="page-title">Mac apps I build to fix my own problems</h1>
+  <p class="eyebrow">Made on a Mac, for the Mac</p>
+  <h1 class="page-title">Mac apps I build to fix my own problems.</h1>
   <p class="lede">Direct downloads, with release notes for every version.</p>
 
   <div id="project-list" class="project-list" aria-busy="true" aria-live="polite">
@@ -45,9 +46,23 @@
   </div>
 </main>
 
+<footer class="site-foot">
+  <div class="site-foot-inner">
+    <small>Copyright &copy; 2026 Chris Seifert. All rights reserved.</small>
+    <nav class="chrome-links" aria-label="Elsewhere">
+      <a href="https://github.com/portseif" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://www.upwork.com/freelancers/portseif" target="_blank" rel="noopener noreferrer">Upwork</a>
+      <a href="mailto:chris@portseif.io">Contact</a>
+    </nav>
+  </div>
+</footer>
+
 <dialog class="changelog" id="changelog" aria-labelledby="changelog-title">
   <header class="changelog-head">
-    <h2 class="changelog-title" id="changelog-title"></h2>
+    <div class="changelog-heading">
+      <h2 class="changelog-title" id="changelog-title"></h2>
+      <p class="changelog-subtitle">Every release, newest first</p>
+    </div>
     <button class="close-button" type="button" aria-label="Close changelog">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -57,7 +72,13 @@
   </header>
   <div class="changelog-body" id="changelog-body" tabindex="0"></div>
   <footer class="changelog-foot">
-    <a class="secondary" id="changelog-source" href="#" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+    <a class="link-arrow" id="changelog-source" href="#" target="_blank" rel="noopener noreferrer">
+      View on GitHub<svg class="arrow-out" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M7 17 17 7M9 7h8v8" />
+      </svg>
+    </a>
+    <span class="changelog-latest" id="changelog-latest"></span>
   </footer>
 </dialog>
 
