@@ -1,0 +1,1128 @@
+/* ---------------------------------------------------------------------------
+   Tokens.
+
+   One accent family (Apple blue), retuned per scheme so button and link
+   contrast clear WCAG AA in both. Accent is reserved for the primary action only, so the
+   Download button is the one thing on the page wearing colour. One radius scale,
+   plus a pill for the one control that is a pill.
+   Neutrals are cool greys, chosen to sit under the achromatic StackMe icon.
+
+   Springs: the page has no JS animation library, so a critically damped spring
+   (Apple's response 0.4 / damping 1.0) is approximated with a single easing
+   curve. Nothing here is gesture-driven, so a curve is honest; anything
+   draggable would need a real spring that can be interrupted mid-flight.
+   --------------------------------------------------------------------------- */
+:root {
+  color-scheme: light dark;
+
+  --page: #fbfbfa;
+  --chrome: rgba(251, 251, 250, 0.72);
+  --chrome-edge: rgba(251, 251, 250, 0.9);
+  --text: #17181a;
+  --text-body: #55565a;
+  --text-muted: #6b6b6f;
+  --rule: #e5e4e1;
+  --hairline: rgba(23, 24, 26, 0.08);
+  --skeleton: #eceae6;
+  --shot-shadow: rgba(23, 24, 26, 0.13);
+  /* Frosted glass. The tint alone cannot carry the text, since a dark app
+     screenshot can sit right behind the panel, so the filter does the work.
+     Light needs its floor lifted before anything else: brightness() multiplies,
+     so it cannot move black at all, and only contrast() below 1 pulls the
+     backdrop up off zero. saturate() runs last so colour survives the wash.
+     Roughly 30% of what is behind still comes through. Body text holds 4.65:1
+     against a pure black backdrop and 7.2:1 against this page; dates, the one
+     muted thing in the panel, hold 5.2:1 here and 3.4:1 in that black worst
+     case, which nothing on this site actually produces. */
+  --glass: rgba(252, 252, 251, 0.7);
+  --glass-filter: blur(40px) contrast(0.45) brightness(1.4) saturate(180%);
+  --glass-edge: rgba(23, 24, 26, 0.1);
+  --panel-shadow: rgba(23, 24, 26, 0.2);
+  --scrim: rgba(23, 24, 26, 0.26);
+
+  /* Apple's own button blue from apple.com, not systemBlue #007AFF: systemBlue
+     carries a white label at 4.02:1 and misses AA. */
+  --accent-fill: #0071e3; /* white label on this = 4.70:1 */
+  --accent-label: #ffffff;
+  /* A darker sibling of the fill, painted as the button's 1px border the way
+     Catalyst rings a solid button. Held at 90% so it settles onto the page. */
+  --accent-border: rgba(0, 91, 184, 0.9);
+  /* White wash laid over the fill on hover and press. */
+  --accent-overlay: rgba(255, 255, 255, 0.1);
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+  --measure: 62ch;
+
+  /* Strong ease-out for entering elements. The built-in easings are too weak
+     to read as intentional. Never ease-in: it delays the first frames, which
+     is exactly when the user is looking. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #111214;
+    --chrome: rgba(17, 18, 20, 0.72);
+    --chrome-edge: rgba(17, 18, 20, 0.9);
+    --text: #f2f2f3;
+    --text-body: #a8a9ad;
+    --text-muted: #95969b;
+    --rule: #26272b;
+    --hairline: rgba(255, 255, 255, 0.09);
+    --skeleton: #1e1f23;
+    --shot-shadow: rgba(0, 0, 0, 0.5);
+    /* Dark needs no floor lift, since its danger is a bright backdrop rather
+       than a black one, so contrast is left alone and only the level comes
+       down. Leaving contrast alone is also what keeps the shapes behind the
+       panel readable as shapes: 45% of the backdrop survives, the most of
+       either scheme. Body text holds 4.72:1 against a pure white backdrop and
+       8:1 against this page. */
+    --glass: rgba(24, 25, 28, 0.55);
+    --glass-filter: blur(40px) brightness(0.4) saturate(180%);
+    --glass-edge: rgba(255, 255, 255, 0.12);
+    --panel-shadow: rgba(0, 0, 0, 0.6);
+    --scrim: rgba(0, 0, 0, 0.45);
+
+    --accent-fill: #0a84ff; /* systemBlue dark; near-black label = 5.18:1 */
+    --accent-label: #041220;
+    /* The dark fill is the light one, so the ring goes to a faint white edge
+       and the wash darkens instead of lightening. */
+    --accent-border: rgba(255, 255, 255, 0.06);
+    --accent-overlay: rgba(4, 18, 32, 0.08);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text);
+  /* System font first: it ships optical sizing and legibility tuning, and on
+     the Macs this page is aimed at it resolves to the app's own typeface. */
+  font:
+    1rem/1.6 -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    system-ui,
+    sans-serif;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+:where(a, button):focus-visible {
+  outline: 2px solid var(--accent-fill);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+/* --- Translucent chrome. Content scrolls under it, and the bottom edge is a
+       soft gradient rather than a hairline. --------------------------------- */
+.chrome {
+  position: sticky;
+  top: 0;
+  z-index: 10; /* the only stacking context on the page */
+  background: var(--chrome);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+.chrome::after {
+  content: "";
+  position: absolute;
+  inset: 100% 0 auto 0;
+  height: 28px;
+  background: linear-gradient(to bottom, var(--chrome-edge), transparent);
+  pointer-events: none;
+}
+
+.chrome-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  height: 3.5rem;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 0.9375rem;
+  font-weight: 590;
+  letter-spacing: 0; /* small text: no negative tracking */
+}
+
+.brand-avatar {
+  border-radius: 50%;
+  display: block;
+}
+
+.chrome-links {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.9375rem;
+}
+
+/* Secondary links stay neutral so the accent belongs to the download alone.
+   They are underlined, so colour is not the only thing marking them. */
+.chrome-links a,
+.secondary {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  color: var(--text-body);
+  text-decoration: underline;
+  text-decoration-color: var(--hairline);
+  text-underline-offset: 4px;
+  /* Hover is not an entrance, so it takes plain `ease` rather than the
+     entering curve: nothing is arriving, a colour is just changing. */
+  transition:
+    color 0.2s ease,
+    text-decoration-color 0.2s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chrome-links a:hover,
+  .secondary:hover {
+    color: var(--text);
+    text-decoration-color: currentColor;
+  }
+}
+
+/* --- Page --- */
+.page {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 4.5rem 1.5rem 5rem;
+}
+
+/* The page title frames the list; the app names below it stay larger, because
+   the apps are what visitors came for. */
+.page-title {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  letter-spacing: -0.018em;
+  font-weight: 620;
+}
+
+.lede {
+  margin: 0.375rem 0 4rem;
+  max-width: 46ch;
+  color: var(--text-body);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+}
+
+/* --- App entries.
+
+   Base layout: the icon holds the left edge and everything else aligns to the
+   app name, so the entry reads as one block rather than a ragged stack.
+
+   When a screenshot exists the entry becomes an asymmetric split: details on
+   the left, product shot spanning the full height on the right. Entries
+   without a screenshot keep the single-column form, so the two can sit on the
+   same page without looking like different templates. --------------------- */
+.project {
+  display: grid;
+  gap: 2.5rem;
+  padding-bottom: 5rem;
+}
+
+.project + .project {
+  border-top: 1px solid var(--rule);
+  padding-top: 5rem;
+}
+
+.project-info {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+/* The container is wide enough for a split entry. An entry without a
+   screenshot is capped so its text does not strand itself on the left. */
+.project:not(.with-screenshot) .project-info {
+  max-width: 50rem;
+}
+
+@media (min-width: 600px) {
+  .project-info {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 2rem;
+  }
+}
+
+@media (min-width: 980px) {
+  .project.with-screenshot {
+    grid-template-columns: minmax(0, 31rem) minmax(0, 1fr);
+    grid-template-areas:
+      "info shot"
+      "notes shot";
+    align-items: start;
+    column-gap: 3.5rem;
+    row-gap: 2.25rem;
+  }
+
+  .project.with-screenshot .project-info {
+    grid-area: info;
+  }
+  .project.with-screenshot .project-shot {
+    grid-area: shot;
+  }
+  .project.with-screenshot .notes {
+    grid-area: notes;
+  }
+
+  /* The details column is narrower here, so the icon steps back and the spec
+     row tightens to keep both on one line. */
+  .project.with-screenshot .project-info {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .project.with-screenshot .project-icon {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+  .project.with-screenshot .spec {
+    gap: 0.25rem 1.75rem;
+  }
+}
+
+/* --- Product shot. No overlaid labels or captions: the image speaks. --- */
+.project-shot {
+  margin: 0;
+}
+
+/* The thumbnail is a button so it can be reached and opened from the keyboard.
+   It carries no chrome of its own; the shot inside it is the whole affordance. */
+.shot-trigger {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+/* Acknowledge the press itself, not the release. */
+.shot-trigger img {
+  transition: transform 240ms var(--ease-out);
+}
+
+.shot-trigger:active img {
+  transform: scale(0.99);
+  transition-duration: 80ms;
+}
+
+/* Held open while the lightbox has the shot, so the two copies never show at
+   once. Hidden rather than removed, so the closing morph still has a box to
+   travel back to. */
+.shot-trigger-lifted {
+  visibility: hidden;
+}
+
+.project-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  box-shadow:
+    0 2px 6px var(--shot-shadow),
+    0 28px 56px -28px var(--shot-shadow);
+}
+
+.project-icon {
+  display: block;
+  width: 5.5rem;
+  height: 5.5rem;
+}
+
+/* Display type: tight leading and negative tracking, both scaling with size. */
+.project-name {
+  margin: 0.75rem 0 0;
+  font-size: clamp(1.875rem, 1.4rem + 1.6vw, 2.5rem);
+  line-height: 1.08;
+  letter-spacing: -0.026em;
+  font-weight: 660;
+}
+
+.project-description {
+  margin: 0.5rem 0 0;
+  max-width: var(--measure);
+  color: var(--text-body);
+  font-size: 1.0625rem;
+}
+
+/* --- Spec pairs. Replaces a middle-dot metadata string. --- */
+.spec {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 2.5rem;
+}
+
+.spec dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.01em; /* small text: a touch of positive tracking */
+  color: var(--text-muted);
+}
+
+.spec dd {
+  margin: 0.1875rem 0 0;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* --- Actions --- */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.75rem;
+  margin-top: 2rem;
+  font-size: 0.9375rem;
+}
+
+/* Modeled on the Catalyst solid button (catalyst.tailwindui.com/docs/button).
+   Three layers: the element paints the 1px ring, a ::before layer paints the
+   fill and casts a neutral drop shadow, and a ::after layer carries the inset
+   white top highlight plus the hover wash. Both pseudo layers sit behind the
+   label inside the button's own stacking context. Dark mode drops the fill
+   layer and its shadow, since against a dark page that shadow is invisible and
+   the tinted version reads as a neon halo. */
+.download {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  /* Padding subtracts the border, so the box still lands on the 4px grid. */
+  padding: calc(0.625rem - 1px) calc(0.875rem - 1px);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--accent-border);
+  color: var(--accent-label);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: transform 0.12s var(--ease-out);
+}
+
+/* Catalyst steps the button down to its compact size at the sm breakpoint. */
+@media (min-width: 40rem) {
+  .download {
+    padding: calc(0.375rem - 1px) calc(0.75rem - 1px);
+    font-size: 0.875rem;
+  }
+}
+
+.download::before,
+.download::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius-pill);
+}
+
+.download::before {
+  background: var(--accent-fill);
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+.download::after {
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.15);
+  transition: background-color 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .download:hover::after {
+    background: var(--accent-overlay);
+  }
+}
+
+.download:active::after {
+  background: var(--accent-overlay);
+}
+
+/* Catalyst sizes a button icon one step below the label and pulls it back into
+   the padding by 2px. The colour is a wash of the label rather than the label
+   itself, so the word stays the loudest thing in the button. */
+.download-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin-inline: -0.125rem;
+  color: color-mix(in srgb, currentColor 60%, transparent);
+  transition: color 0.2s ease;
+}
+
+@media (min-width: 40rem) {
+  .download-icon {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .download:hover .download-icon {
+    color: color-mix(in srgb, currentColor 80%, transparent);
+  }
+}
+
+/* Feedback on press, not on release. */
+.download:active {
+  transform: scale(0.972);
+  transition-duration: 0.06s;
+}
+
+@media (prefers-color-scheme: dark) {
+  .download {
+    border-color: var(--accent-border);
+    background: var(--accent-fill);
+  }
+  .download::before {
+    display: none;
+  }
+  .download::after {
+    inset: -1px;
+    border-radius: var(--radius-pill);
+  }
+}
+
+/* --- Release notes. A single hairline above the group, not a box and not
+       a rule under every row. --- */
+.notes {
+  margin: 0;
+  padding: 1.5rem 0 0;
+  border-top: 1px solid var(--rule);
+  list-style: none;
+  max-width: var(--measure);
+}
+
+.notes li {
+  position: relative;
+  padding-left: 1.125rem;
+  color: var(--text-body);
+  font-size: 0.9375rem;
+}
+
+.notes li + li {
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 599px) {
+  .actions {
+    gap: 0.75rem 1.25rem;
+  }
+}
+
+.notes li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 5px;
+  height: 1px;
+  background: var(--text-muted);
+}
+
+/* --- Loading, empty and error states --- */
+.skeleton {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+}
+
+@media (min-width: 600px) {
+  .skeleton {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 2rem;
+  }
+}
+
+.skeleton-icon {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: var(--radius);
+  background: var(--skeleton);
+}
+
+.skeleton-body {
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+}
+.skeleton-bar {
+  height: 0.875rem;
+  border-radius: var(--radius-sm);
+  background: var(--skeleton);
+}
+.skeleton-button {
+  width: 8rem;
+  height: 2.75rem;
+  border-radius: var(--radius-pill);
+}
+@media (min-width: 40rem) {
+  .skeleton-button {
+    width: 7rem;
+    height: 2.25rem;
+  }
+}
+
+.status {
+  margin: 0;
+  max-width: var(--measure);
+  color: var(--text-body);
+}
+
+
+
+/* ---------------------------------------------------------------------------
+   Changelog panel.
+
+   A right-side inset drawer on a glass material. Enter and exit run along the
+   same axis it sits on, so the panel reads as coming from and returning to the
+   right edge.
+
+   Motion notes:
+     - Transitions, not keyframes, so a rapid open/close retargets from the
+       current position instead of restarting from zero.
+     - Enter 420ms on the drawer curve, exit 260ms. Exit is faster because the
+       user has already decided; the system should get out of the way.
+     - Only transform and opacity animate. display and overlay are discrete,
+       which is what keeps the exit visible on a native <dialog>.
+     - Never ease-in. It withholds the first frames, which is the moment the
+       user is watching most closely.
+   --------------------------------------------------------------------------- */
+
+.panel-open { overflow: hidden; }
+
+.changelog {
+  position: fixed;
+  inset: 0 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  width: min(34rem, 100vw);
+  max-width: none;
+  max-height: none;
+  height: auto;
+  padding: 0;
+  /* Flush to the window, so the only edge that exists is the one facing the
+     page. No radius for the same reason: there is no corner to round. */
+  border: 0;
+  border-left: 1px solid var(--glass-edge);
+  border-radius: 0;
+  background: var(--glass);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  box-shadow: -24px 0 64px -24px var(--panel-shadow);
+  color: var(--text);
+  overflow: hidden;
+
+  /* Closed state doubles as the exit transition. */
+  transform: translateX(100%);
+  opacity: 0;
+  transition:
+    transform 260ms var(--ease-out),
+    opacity 180ms var(--ease-out),
+    overlay 260ms allow-discrete,
+    display 260ms allow-discrete;
+}
+
+/* While the pointer owns the panel, CSS must not: a transition here would
+   fight the frame-by-frame transform and lag the finger. */
+.changelog.dragging {
+  transition: none;
+}
+
+/* Only where the flick gesture actually exists. A mouse gets no grab cursor,
+   because for a mouse there is nothing to grab. */
+@media (hover: none), (pointer: coarse) {
+  .changelog-head {
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+.changelog[open] {
+  transform: translateX(0);
+  opacity: 1;
+  transition:
+    transform 420ms var(--ease-drawer),
+    opacity 200ms var(--ease-out),
+    overlay 420ms allow-discrete,
+    display 420ms allow-discrete;
+}
+
+@starting-style {
+  .changelog[open] {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.changelog::backdrop {
+  background: var(--scrim);
+  opacity: 0;
+  transition: opacity 260ms var(--ease-out), overlay 260ms allow-discrete,
+    display 260ms allow-discrete;
+}
+
+.changelog[open]::backdrop { opacity: 1; }
+
+@starting-style {
+  .changelog[open]::backdrop { opacity: 0; }
+}
+
+.changelog-head,
+.changelog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.125rem 1.375rem;
+}
+
+/* No rules under the head or over the foot. Content fades into the floating
+   chrome instead, and only on the side that actually has content past the
+   edge, so a panel scrolled to the top keeps a crisp first line. */
+@property --fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.changelog-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+
+/* --- Screenshot lightbox. The morph is driven from app.js; what lives here is
+       the resting layout it animates to, plus the scrim. ---------------------- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+/* Only on [open], so the UA's own display:none still hides it when closed. */
+.lightbox[open] {
+  display: grid;
+  place-items: center;
+}
+
+.lightbox::backdrop {
+  background: var(--scrim);
+  /* Heavy blur and no level clamping: the page behind stays legible as a page,
+     just smeared past the point of competing with the shot. Darkening it would
+     read as a curtain rather than as glass. */
+  backdrop-filter: blur(32px) saturate(140%);
+  -webkit-backdrop-filter: blur(32px) saturate(140%);
+  opacity: 0;
+  transition:
+    opacity 300ms var(--ease-out),
+    overlay 300ms allow-discrete,
+    display 300ms allow-discrete;
+}
+
+.lightbox[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  .lightbox[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* The morph out finishes before the dialog closes, so the scrim fades on a
+   class rather than waiting for the close to trigger its exit transition. */
+.lightbox.closing::backdrop {
+  opacity: 0;
+}
+
+.lightbox-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(94vw, 1400px);
+  max-height: 92vh;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  box-shadow:
+    0 2px 6px var(--shot-shadow),
+    0 40px 80px -32px var(--shot-shadow);
+  cursor: zoom-out;
+}
+
+/* The dismiss both dialogs share, built like a macOS sheet's: a small filled
+   disc rather than an outlined web button, so it reads as a glyph sitting on
+   the surface instead of a control competing with the title. The disc is 28px
+   and the hit area is padded back out to 44px, which is the size a finger
+   needs even though the eye does not. */
+.close-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 1;
+  /* Press uses the entering curve, hover colours use `ease`. */
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 120ms var(--ease-out);
+}
+
+.close-button::after {
+  content: "";
+  position: absolute;
+  inset: -0.5rem;
+}
+
+.close-button svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .close-button:hover {
+    background: color-mix(in srgb, var(--text) 15%, transparent);
+    color: var(--text);
+  }
+}
+
+.close-button:active { transform: scale(0.96); }
+
+/* Floating over the shot rather than sitting in a header, so it needs colours
+   of its own. Dark fill with a light rim and glyph in both schemes: the scrim
+   behind it stays see-through, so in light mode it sits on a pale page, and
+   the dark pill is what holds its shape there. No backdrop-filter, since a
+   filter nested inside the ::backdrop's own makes Chrome paint a ghost copy of
+   the button in the opposite corner. */
+.lightbox-close {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lightbox-close:hover {
+    background: rgba(0, 0, 0, 0.55);
+    color: #ffffff;
+  }
+}
+
+/* The button belongs to the open state, not to the exit. It goes the moment a
+   close starts, so the only thing travelling back to the thumbnail is the
+   shot itself. */
+.lightbox.closing .lightbox-close {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.changelog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.375rem;
+  /* The mask sits on the scroll container, so each fade stays pinned to its
+     edge while the notes travel under it. app.js drives the two lengths from
+     the scroll offset: each one grows with the distance scrolled past that
+     edge, up to 24px, so the fade appears as the content does. */
+  --fade-top: 0px;
+  --fade-bottom: 0px;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+  transition:
+    --fade-top 120ms var(--ease-out),
+    --fade-bottom 120ms var(--ease-out);
+
+}
+
+.release + .release { margin-top: 2rem; }
+
+.release-version {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.625rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 620;
+}
+
+.release-date {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.release .notes {
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+  max-width: none;
+}
+
+.changelog-skeleton { display: grid; gap: 0.875rem; }
+
+/* At full width there is no page beside the panel, so the edge goes too. */
+@media (max-width: 34rem) {
+  .changelog { border-left: 0; }
+}
+
+/* --- Scrollbars. The pill and nothing under it, on the page and in the panel
+       alike. A track would draw a second vertical line down surfaces whose
+       whole point is that they have none. ----------------------------------- */
+html,
+.changelog-body {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text) 24%, transparent) transparent;
+}
+
+html::-webkit-scrollbar,
+.changelog-body::-webkit-scrollbar {
+  width: 0.5rem;
+}
+
+html::-webkit-scrollbar-track,
+.changelog-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* The transparent border is what insets the pill from the gutter; without
+   background-clip it would be painted over. */
+html::-webkit-scrollbar-thumb,
+.changelog-body::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 24%, transparent);
+  background-clip: content-box;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html::-webkit-scrollbar-thumb:hover,
+  .changelog-body::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--text) 38%, transparent);
+    background-clip: content-box;
+  }
+}
+
+/* --- Motion. Entries materialize (blur and scale together) as they arrive,
+       which is the one state change on the page worth showing. --------------- */
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-icon,
+  .skeleton-bar {
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  .project {
+    animation: materialize 450ms var(--ease-out) backwards;
+    animation-delay: calc(var(--index) * 70ms);
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  @keyframes materialize {
+    from {
+      opacity: 0;
+      transform: scale(0.985) translateY(10px);
+      filter: blur(6px);
+    }
+  }
+
+  /* Short stagger as the fetched releases land. Decorative, so it is capped:
+     long delays make the panel feel slower than it is. */
+  .release {
+    animation: rise 260ms var(--ease-out) backwards;
+  }
+
+  .release:nth-child(2) { animation-delay: 45ms; }
+  .release:nth-child(3) { animation-delay: 90ms; }
+  .release:nth-child(4) { animation-delay: 135ms; }
+  .release:nth-child(n + 5) { animation-delay: 180ms; }
+
+  /* Download arrow nudges down and settles, once per hover or focus. Ported
+     from Heroicons Animated (MIT, github.com/Aniket-508/heroicons-animated):
+     2 units down over the first 40% of the run, back over the rest. Shortened
+     from the original 500ms to 300ms, since a hover on the page's primary
+     button is not a place to spend half a second. The translate is in viewBox
+     units, so it tracks whatever size the icon renders at. */
+  @keyframes download-arrow {
+    0% {
+      translate: 0 0;
+    }
+    40% {
+      translate: 0 2px;
+    }
+    100% {
+      translate: 0 0;
+    }
+  }
+
+  .download:focus-visible .download-icon-arrow {
+    animation: download-arrow 300ms ease-in-out;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .download:hover .download-icon-arrow {
+      animation: download-arrow 300ms ease-in-out;
+    }
+  }
+}
+
+/* Reduced motion still gets a state change, just a non-vestibular one. */
+@media (prefers-reduced-motion: reduce) {
+  .project {
+    animation: fade 0.2s ease backwards;
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .release {
+    animation: fade 200ms ease backwards;
+    animation-delay: 0ms;
+  }
+
+  .changelog,
+  .changelog[open] {
+    transform: none;
+    transition:
+      opacity 200ms ease,
+      overlay 200ms allow-discrete,
+      display 200ms allow-discrete;
+  }
+
+  @starting-style {
+    .changelog[open] {
+      transform: none;
+      opacity: 0;
+    }
+  }
+}
+
+/* --- Material fallbacks --- */
+@media (prefers-reduced-transparency: reduce) {
+  .chrome {
+    background: var(--page);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-bottom: 1px solid var(--rule);
+  }
+  .chrome::after {
+    display: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --hairline: currentColor;
+  }
+  .notes {
+    border-color: var(--text-muted);
+  }
+  .chrome-links a,
+  .secondary {
+    color: var(--text);
+    text-decoration-color: currentColor;
+  }
+
+  .changelog {
+    background: var(--page);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 2px solid var(--text);
+  }
+  .close-button {
+    border: 1px solid var(--text);
+    color: var(--text);
+  }
+}

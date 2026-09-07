@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apps by Chris Seifert</title>
+<meta name="description" content="Mac apps I build, with direct downloads and release notes.">
+<meta property="og:title" content="Apps by Chris Seifert">
+<meta property="og:description" content="Mac apps I build, with direct downloads and release notes.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://portseif.github.io/">
+<link rel="icon" href="icons/StackMe.png">
+<link rel="preload" as="image" href="icons/StackMe.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="chrome">
+  <div class="chrome-inner">
+    <span class="brand">
+      <img class="brand-avatar" src="https://avatars.githubusercontent.com/u/13489304?v=4" alt="" width="28" height="28">
+      Chris Seifert
+    </span>
+    <nav class="chrome-links" aria-label="Elsewhere">
+      <a href="https://github.com/portseif" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://www.upwork.com/freelancers/portseif" target="_blank" rel="noopener noreferrer">Upwork</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page">
+  <h1 class="page-title">Mac apps I build to fix my own problems</h1>
+  <p class="lede">Direct downloads, with release notes for every version.</p>
+
+  <div id="project-list" class="project-list" aria-busy="true" aria-live="polite">
+    <div class="skeleton" aria-hidden="true">
+      <div class="skeleton-icon"></div>
+      <div class="skeleton-body">
+        <div class="skeleton-bar" style="width: 38%"></div>
+        <div class="skeleton-bar" style="width: 64%"></div>
+        <div class="skeleton-bar skeleton-button"></div>
+      </div>
+    </div>
+    <p class="sr-only">Loading apps.</p>
+  </div>
+</main>
+
+<dialog class="changelog" id="changelog" aria-labelledby="changelog-title">
+  <header class="changelog-head">
+    <h2 class="changelog-title" id="changelog-title"></h2>
+    <button class="close-button" type="button" aria-label="Close changelog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
+  </header>
+  <div class="changelog-body" id="changelog-body" tabindex="0"></div>
+  <footer class="changelog-foot">
+    <a class="secondary" id="changelog-source" href="#" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+  </footer>
+</dialog>
+
+<dialog class="lightbox" id="lightbox" aria-label="Screenshot">
+  <button class="close-button lightbox-close" type="button" aria-label="Close screenshot">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  </button>
+  <img class="lightbox-image" id="lightbox-image" alt="">
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
