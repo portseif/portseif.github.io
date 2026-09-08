@@ -240,17 +240,6 @@ body {
 
 /* The page title frames the list; the app names below it stay larger, because
    the apps are what visitors came for. */
-/* Accent on a line of text, not just on the button. It is small and it labels
-   the page, so it gets positive tracking rather than the negative kind the
-   display line below it wants. */
-.eyebrow {
-  margin: 0 0 0.75rem;
-  color: var(--accent-fill);
-  font-size: 0.9375rem;
-  font-weight: 620;
-  letter-spacing: 0.005em;
-}
-
 /* Display type: leading and tracking both tighten as the size grows, which is
    the whole reason this is not just the body size scaled up. */
 .page-title {
