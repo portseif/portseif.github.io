@@ -92,8 +92,12 @@
     --panel-shadow: rgba(0, 0, 0, 0.6);
     --scrim: rgba(0, 0, 0, 0.45);
 
-    --accent-fill: #0a84ff; /* systemBlue dark; near-black label = 5.18:1 */
-    --accent-label: #041220;
+    /* White label in both schemes. On systemBlue that measures 3.65:1, under
+       the 4.5:1 AA needs for 15px text; dropping the fill to the light
+       scheme's #0071e3 would take it to 4.70:1 at the cost of some of the
+       brightness the design wants. */
+    --accent-fill: #0a84ff; /* systemBlue dark; white label = 3.65:1 */
+    --accent-label: #ffffff;
     /* The dark fill is the light one, so the ring goes to a faint white edge
        and the wash darkens instead of lightening. */
     --accent-border: rgba(255, 255, 255, 0.06);
