@@ -1281,14 +1281,13 @@ html::-webkit-scrollbar-thumb,
      a place to spend half a second.
 
      The translate is in viewBox units, so it tracks whatever size the icon
-     renders at. Lucide draws on a 14-unit grid where Heroicons used 24, so the
-     original 2 units becomes 2 x 14/24 to travel the same distance on screen. */
+     renders at. */
   @keyframes download-arrow {
     0% {
       translate: 0 0;
     }
     40% {
-      translate: 0 1.167px;
+      translate: 0 2px;
     }
     100% {
       translate: 0 0;
