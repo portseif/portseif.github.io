@@ -244,7 +244,6 @@ body {
    the whole reason this is not just the body size scaled up. */
 .page-title {
   margin: 0;
-  max-width: 18ch;
   font-size: clamp(2.5rem, 1.25rem + 3.6vw, 4.5rem);
   line-height: 1.02;
   letter-spacing: -0.035em;
