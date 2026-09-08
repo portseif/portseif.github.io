@@ -9,23 +9,24 @@ const PAGES_ORIGIN = `https://${GITHUB_USER}.github.io`;
 const SPARKLE_NAMESPACE = "http://www.andymatuschak.org/xml-namespaces/sparkle";
 const MAX_RELEASE_NOTES = 5;
 
-// Heroicons' arrow-down-tray, split so the arrow can be nudged on its own. The
-// hover animation is Aniket Pawar's, from Heroicons Animated (MIT,
+// Lucide's arrow-down-to-line, a filled icon rather than a stroked one, so it
+// needs no stroke weight matched to the label the way an outline icon would.
+//
+// It ships as one path holding both the arrow and the line under it. Splitting
+// them lets the hover animation move the arrow alone, which is the whole point
+// of it. The second subpath opened with a moveto relative to the end of the
+// first, so it gets that resolved to an absolute one to stand on its own.
+//
+// The nudge is Aniket Pawar's, from Heroicons Animated (MIT,
 // github.com/Aniket-508/heroicons-animated), ported from Motion to a keyframe
 // in styles.css since this page carries no animation library.
-//
-// Stroke is 2.5 viewBox units rather than the Heroicons default of 1.5, so it
-// carries the same weight as the label beside it: the 600-weight label strokes
-// a 1.73px stem at 14px and a 1.98px stem at 16px, and 2.5 units lands on
-// 1.67px at the 16px icon and 2.08px at the 20px one.
 const DOWNLOAD_ICON = `
-  <svg class="download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-       stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+  <svg class="download-icon" viewBox="0 0 14 14" fill="currentColor"
        aria-hidden="true" focusable="false">
-    <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5" />
     <g class="download-icon-arrow">
-      <path d="M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+      <path d="M6.84619 1.18945q-0.25293 0.08545-0.37939 0.30762l-0.04102 0.08545 0 6.92822-1.28857-1.28515q-1.30225-1.28857-1.37061-1.33301-0.11279-0.05469-0.2666-0.05469-0.15381 0-0.2666 0.05469-0.08203 0.04443-0.16065 0.13672-0.0752 0.08887-0.11279 0.18799-0.03418 0.0957-0.03418 0.22216 0 0.12646 0.05469 0.22559 0.01709 0.05469 0.36572 0.41357 0.34863 0.35547 1.49707 1.50391 1.14844 1.14844 1.50391 1.50049 0.35889 0.34863 0.41357 0.3623 0.09912 0.05469 0.23926 0.05469 0.14014 0 0.23926-0.04102 0.05469-0.02734 0.41015-0.37597 0.35889-0.35205 1.50733-1.50049 1.14844-1.14844 1.49707-1.50391 0.34863-0.35889 0.36572-0.41357 0.05469-0.09912 0.05469-0.22559 0-0.12646-0.0376-0.22216-0.03418-0.09912-0.11279-0.18799-0.0752-0.09229-0.15723-0.13672-0.11279-0.05469-0.2666-0.05469-0.15381 0-0.2666 0.05469-0.06836 0.04443-1.37061 1.33301l-1.28857 1.28515 0-6.92822-0.04102-0.08545q-0.09912-0.18115-0.28027-0.2666-0.08545-0.04102-0.22559-0.04785-0.14014-0.00684-0.18115 0.00683z" />
     </g>
+    <path d="M2.73096 11.70313q-0.23926 0.08545-0.34522 0.3247-0.10254 0.23584-0.00683 0.46143 0.05811 0.0957 0.14013 0.18115 0.08545 0.08203 0.18457 0.12647l0.09571 0.02734 8.40136 0 0.09571-0.02734q0.09912-0.04443 0.18115-0.12647 0.08545-0.08545 0.1333-0.18799 0.05127-0.10596 0.05127-0.23242 0-0.12646-0.04102-0.23926-0.09912-0.19482-0.29394-0.29394l-0.08545-0.04102-4.22803 0q-4.22803 0-4.28271 0.02735z" />
   </svg>`;
 
 const CHEVRON_ICON = `
@@ -46,11 +47,18 @@ const PLUS_ICON = `
     <path d="M12 5v14M5 12h14" />
   </svg>`;
 
+// const WRENCH_ICON = `
+//   <svg class="note-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+//        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+//     <path d="M14.7 6.3a4 4 0 0 0 5 5l-9.4 9.4a2.1 2.1 0 0 1-3-3l9.4-9.4a4 4 0 0 0-5-5l3 3-2 2-3-3a4 4 0 0 1 5-1z" />
+//   </svg>`;
+
 const WRENCH_ICON = `
-  <svg class="note-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-    <path d="M14.7 6.3a4 4 0 0 0 5 5l-9.4 9.4a2.1 2.1 0 0 1-3-3l9.4-9.4a4 4 0 0 0-5-5l3 3-2 2-3-3a4 4 0 0 1 5-1z" />
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
   </svg>`;
+
 
 const listElement = document.getElementById("project-list");
 
@@ -330,7 +338,7 @@ function renderWhatsNew(project) {
       </header>
       <div class="whats-new-columns">
         ${column("Added", added, PLUS_ICON)}
-        ${column("Fixed &amp; tidied", fixed, WRENCH_ICON)}
+        ${column("Fixed", fixed, WRENCH_ICON)}
       </div>
     </section>`;
 }

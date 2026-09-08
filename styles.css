@@ -1276,16 +1276,19 @@ html::-webkit-scrollbar-thumb,
 
   /* Download arrow nudges down and settles, once per hover or focus. Ported
      from Heroicons Animated (MIT, github.com/Aniket-508/heroicons-animated):
-     2 units down over the first 40% of the run, back over the rest. Shortened
-     from the original 500ms to 300ms, since a hover on the page's primary
-     button is not a place to spend half a second. The translate is in viewBox
-     units, so it tracks whatever size the icon renders at. */
+     down over the first 40% of the run, back over the rest. Shortened from the
+     original 500ms to 300ms, since a hover on the page's primary button is not
+     a place to spend half a second.
+
+     The translate is in viewBox units, so it tracks whatever size the icon
+     renders at. Lucide draws on a 14-unit grid where Heroicons used 24, so the
+     original 2 units becomes 2 x 14/24 to travel the same distance on screen. */
   @keyframes download-arrow {
     0% {
       translate: 0 0;
     }
     40% {
-      translate: 0 2px;
+      translate: 0 1.167px;
     }
     100% {
       translate: 0 0;
