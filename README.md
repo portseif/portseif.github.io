@@ -14,6 +14,12 @@ few release-note bullets straight out of the Sparkle feed.
 So publishing a new app means creating a `<Name>-releases` repo with Pages
 enabled and an `appcast.xml` at its root. Nothing here needs editing.
 
+GitHub allows 60 API calls an hour per IP address without a token, so the repo
+list is kept in `localStorage` for an hour, and when the API refuses (a spent
+limit, an outage) the last copy is used whatever its age. A new app can take
+up to an hour to show for someone who visited recently. A first visit from a
+network that has spent its limit says when it resets.
+
 Optional per-project extras, all safely skipped when missing:
 
 - the repo description becomes the one-line blurb under the app name
@@ -24,6 +30,15 @@ Optional per-project extras, all safely skipped when missing:
 - a **screenshot**, same idea, `.webp` preferred over `.png` at each step:
   1. `screenshot.webp` / `screenshot.png` at the root of the `<Name>-releases` repo
   2. `screenshots/<AppName>.webp` / `.png` in this repo
+- **several screenshots**, from a `screenshots.json` at the root of the
+  `<Name>-releases` repo, in the order they show:
+  `[{ "src": "screenshots/projects.webp", "alt": "The projects table" }, …]`,
+  each `src` relative to that repo's Pages root. Two or more render as a fanned
+  stack (front card whole, its neighbours tucked behind and sticking out either
+  side, wrapping from three up) that moves by drag, swipe, the dots or the
+  arrow keys; the front card opens the lightbox. Capture them all at the same
+  size: every card takes the first one's proportions. Without the file, or if
+  none of its images load, the single-screenshot lookup above applies.
 
 `<AppName>` is the appcast's `<channel><title>`. Both images are probed before
 the entry renders, so a missing one never reserves empty space.

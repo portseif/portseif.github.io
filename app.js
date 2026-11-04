@@ -9,6 +9,16 @@ const PAGES_ORIGIN = `https://${GITHUB_USER}.github.io`;
 const SPARKLE_NAMESPACE = "http://www.andymatuschak.org/xml-namespaces/sparkle";
 const MAX_RELEASE_NOTES = 5;
 
+// GitHub allows 60 API calls an hour per IP address without a token, and every
+// load of this page spent one, so a few reloads (or a shared office network)
+// ran it dry and the page showed nothing. The list of apps changes about never,
+// so it's kept in the browser for an hour, and when the API refuses — a rate
+// limit, an outage — the last copy is used whatever its age. Up here because
+// main() runs before the rest of the file: a constant declared further down is
+// still uninitialised when it first reads the cache.
+const REPOS_CACHE_KEY = "release-repos.v1";
+const REPOS_CACHE_FRESH_MS = 60 * 60 * 1000;
+
 // Lucide's arrow-down-to-line, stroked at 2.5 to sit at the same weight as the
 // other icons on the page rather than Lucide's own 2. It ships the shaft, the
 // chevron and the line under them as three paths, so the two that make up the
@@ -62,7 +72,7 @@ async function main() {
     releaseRepos = await fetchReleaseRepos();
   } catch (error) {
     showStatus(
-      `Could not reach the GitHub API (${error.message}). ` +
+      `${escapeHtml(error.message)} ` +
         `<a href="https://github.com/${GITHUB_USER}?tab=repositories">Browse the repositories instead</a>.`
     );
     return;
@@ -88,15 +98,64 @@ async function main() {
   wireChangelogPanel();
   wirePanelDrag();
   wireLightbox();
+  wireScreenshotStacks();
 }
 
 async function fetchReleaseRepos() {
-  const response = await fetch(
-    `https://api.github.com/users/${GITHUB_USER}/repos?per_page=100&type=owner`
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const repos = await response.json();
-  return repos.filter((repo) => !repo.fork && !repo.archived && repo.name.endsWith(RELEASES_SUFFIX));
+  const cached = readCachedRepos();
+  if (cached && Date.now() - cached.savedAt < REPOS_CACHE_FRESH_MS) return cached.repos;
+
+  try {
+    const response = await fetch(
+      `https://api.github.com/users/${GITHUB_USER}/repos?per_page=100&type=owner`
+    );
+    if (!response.ok) throw new Error(apiFailureMessage(response));
+    const repos = (await response.json())
+      .filter((repo) => !repo.fork && !repo.archived && repo.name.endsWith(RELEASES_SUFFIX))
+      // Only what the entries read, so the stored copy stays small.
+      .map(({ name, description, html_url, default_branch }) => ({
+        name,
+        description,
+        html_url,
+        default_branch,
+      }));
+    writeCachedRepos(repos);
+    return repos;
+  } catch (error) {
+    if (cached) return cached.repos;
+    throw error;
+  }
+}
+
+// A spent rate limit says when it comes back (X-RateLimit-Reset, which GitHub
+// exposes to pages on other origins); anything else keeps its status code.
+function apiFailureMessage(response) {
+  const reset = Number(response.headers.get("x-ratelimit-reset"));
+  if (response.headers.get("x-ratelimit-remaining") === "0" && reset) {
+    const time = new Date(reset * 1000).toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    return `GitHub's hourly limit for this network is used up until ${time}.`;
+  }
+  return `Could not reach the GitHub API (HTTP ${response.status}).`;
+}
+
+// Storage can be off (a private window, blocked site data), so both sides
+// treat a failure as no cache.
+function readCachedRepos() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(REPOS_CACHE_KEY));
+    return Array.isArray(stored?.repos) && typeof stored.savedAt === "number" ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedRepos(repos) {
+  try {
+    localStorage.setItem(REPOS_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), repos }));
+  } catch {}
 }
 
 // Reads one repo's appcast and folds it together with the repo metadata.
@@ -132,15 +191,11 @@ async function loadProject(repo) {
 
   // Both artwork slots prefer a file published alongside the release, so a new
   // app needs no change here, and fall back to one committed to this repo.
-  // Either resolves to null and is simply left out of the entry.
-  const [icon, screenshot] = await Promise.all([
+  // A missing icon resolves to null and no screenshots to an empty list, and
+  // either is simply left out of the entry.
+  const [icon, screenshots] = await Promise.all([
     resolveFirstImage([`${repoPagesUrl}/icon.png`, `icons/${name}.png`]),
-    resolveFirstImage([
-      `${repoPagesUrl}/screenshot.webp`,
-      `${repoPagesUrl}/screenshot.png`,
-      `screenshots/${name}.webp`,
-      `screenshots/${name}.png`,
-    ]),
+    resolveScreenshots(repoPagesUrl, name),
   ]);
 
   return {
@@ -155,7 +210,7 @@ async function loadProject(repo) {
     releasedAt: hasPublishedDate ? publishedDate : new Date(0),
     hasPublishedDate,
     icon,
-    screenshot,
+    screenshots,
     changelogUrl: `${repo.html_url}/blob/${repo.default_branch}/CHANGELOG.md`,
     changelogSource: `${repoPagesUrl}/CHANGELOG.md`,
     repoUrl: repo.html_url,
@@ -205,7 +260,7 @@ function extractReleaseNotes(descriptionHtml) {
 
 function buildProjectEntry(project, index) {
   const entry = document.createElement("article");
-  entry.className = project.screenshot ? "project with-screenshot" : "project";
+  entry.className = project.screenshots.length ? "project with-screenshot" : "project";
   entry.style.setProperty("--index", index);
 
   const specs = [];
@@ -259,22 +314,68 @@ function buildProjectEntry(project, index) {
         </dl>
       </div>
     </div>
-    ${
-      project.screenshot
-        ? `<figure class="project-shot">
-             <button class="shot-trigger" type="button"
-                     aria-label="View the ${escapeHtml(project.name)} screenshot full size">
-               <img src="${escapeHtml(project.screenshot.url)}"
-                    alt="${escapeHtml(project.name)} running on macOS"
-                    width="${project.screenshot.width}" height="${project.screenshot.height}"
-                    fetchpriority="${index === 0 ? "high" : "auto"}">
-             </button>
-           </figure>`
-        : ""
-    }
+    ${renderScreenshots(project, index)}
     ${renderWhatsNew(project)}`;
 
   return entry;
+}
+
+// One shot is a single button that opens the lightbox. Two or more are a stack
+// (wired by wireScreenshotStacks): every card sits in the same grid cell, the
+// front one is the only one in the tab order, and the dots and arrow keys are
+// the way through it for anyone not dragging.
+function renderScreenshots(project, index) {
+  const shots = project.screenshots;
+  if (!shots.length) return "";
+
+  const priority = index === 0 ? "high" : "auto";
+  const altFor = (shot, position) =>
+    shot.alt ||
+    (shots.length > 1
+      ? `${project.name} screenshot ${position + 1}`
+      : `${project.name} running on macOS`);
+
+  if (shots.length === 1) {
+    const [shot] = shots;
+    return `<figure class="project-shot">
+         <button class="shot-trigger" type="button"
+                 aria-label="View the ${escapeHtml(project.name)} screenshot full size">
+           <img src="${escapeHtml(shot.url)}" alt="${escapeHtml(altFor(shot, 0))}"
+                width="${shot.width}" height="${shot.height}" fetchpriority="${priority}">
+         </button>
+       </figure>`;
+  }
+
+  // Every card takes the first shot's proportions, so one captured at another
+  // size crops instead of jutting out of the stack.
+  const [first] = shots;
+  return `<figure class="project-shot shot-stack" aria-roledescription="carousel"
+                  aria-label="${escapeHtml(project.name)} screenshots"
+                  style="--shot-ratio: ${first.width} / ${first.height}">
+       <div class="shot-deck">
+         ${shots
+           .map(
+             (shot, position) => `
+           <button class="shot-trigger shot-card" type="button" data-shot="${position}"
+                   aria-label="View screenshot ${position + 1} of ${shots.length} full size">
+             <img src="${escapeHtml(shot.url)}" alt="${escapeHtml(altFor(shot, position))}"
+                  width="${first.width}" height="${first.height}" draggable="false"
+                  fetchpriority="${position === 0 ? priority : "auto"}">
+           </button>`
+           )
+           .join("")}
+       </div>
+       <div class="shot-dots">
+         ${shots
+           .map(
+             (_, position) =>
+               `<button class="shot-dot" type="button" data-shot="${position}"
+                        aria-label="Show screenshot ${position + 1}"></button>`
+           )
+           .join("")}
+       </div>
+       <p class="sr-only shot-status" aria-live="polite"></p>
+     </figure>`;
 }
 
 // The changelog is one flat list of bullets, but a release reads better split
@@ -333,6 +434,42 @@ function renderWhatsNew(project) {
         ${column("Fixed", fixed, WRENCH_ICON)}
       </div>
     </section>`;
+}
+
+// Several shots come from a screenshots.json beside the appcast, in the order
+// they show: [{ "src": "screenshots/projects.webp", "alt": "…" }, …], each src
+// relative to that repo's Pages root. Without one, or when none of its images
+// load, the single screenshot.webp/.png lookup runs, so an app with one shot
+// needs no manifest at all.
+async function resolveScreenshots(repoPagesUrl, name) {
+  try {
+    const response = await fetch(`${repoPagesUrl}/screenshots.json`, { cache: "no-cache" });
+    if (response.ok) {
+      const entries = await response.json();
+      if (Array.isArray(entries)) {
+        const shots = await Promise.all(
+          entries
+            .filter((entry) => typeof entry?.src === "string")
+            .map(async (entry) => {
+              const image = await resolveFirstImage([new URL(entry.src, `${repoPagesUrl}/`).href]);
+              return image && { ...image, alt: typeof entry.alt === "string" ? entry.alt : "" };
+            })
+        );
+        const loaded = shots.filter(Boolean);
+        if (loaded.length) return loaded;
+      }
+    }
+  } catch {
+    // A malformed manifest is no manifest.
+  }
+
+  const single = await resolveFirstImage([
+    `${repoPagesUrl}/screenshot.webp`,
+    `${repoPagesUrl}/screenshot.png`,
+    `screenshots/${name}.webp`,
+    `screenshots/${name}.png`,
+  ]);
+  return single ? [single] : [];
 }
 
 // Tries each candidate URL in order and resolves with the first that actually
@@ -571,7 +708,8 @@ let morph = null;
 function wireLightbox() {
   listElement.addEventListener("click", (event) => {
     const trigger = event.target.closest(".shot-trigger");
-    if (trigger) openLightbox(trigger);
+    // A card behind the front one is a way to move the stack, not to open it.
+    if (trigger && !trigger.matches(".shot-card:not(.is-active)")) openLightbox(trigger);
   });
 
   lightbox.addEventListener("click", () => closeLightbox());
@@ -846,4 +984,245 @@ function wirePanelDrag() {
     settle = null;
     release();
   });
+}
+
+
+/* ---------------------------------------------------------------------------
+   Screenshot stack.
+
+   The shots sit fanned: the front one whole, the ones either side of it
+   tucked behind, smaller, tilted out from the bottom and sticking out past its
+   edges, so there is visibly more to see without a single label saying so.
+   With three or more it wraps, so there is always one out on each side.
+
+   A drag (mouse or finger) moves the stack continuously and lets go into the
+   same spring the changelog panel uses, carrying the release velocity, and it
+   moves one card per flick however hard the flick. A press that never travels
+   is a click: on the front card it opens the lightbox, on a card behind it
+   brings that one forward. Arrow keys and the dots do the same for anyone not
+   dragging. Every card's place is a function of one number, the stack's
+   position in cards, so a drag, a spring and a click all just move that number.
+   --------------------------------------------------------------------------- */
+
+const STACK_INSET = 0.06; // share of the deck each side left for a peeking card
+const STACK_SIDE_SCALE = 0.9;
+const STACK_SIDE_TILT = 2; // degrees, pivoting on the card's bottom edge
+const STACK_SIDE_OPACITY = 0.6;
+const STACK_DRAG_PER_CARD = 0.5; // share of a card's width dragged to move one card
+
+function wireScreenshotStacks() {
+  listElement.querySelectorAll(".shot-stack").forEach(wireScreenshotStack);
+}
+
+function wireScreenshotStack(stack) {
+  const deck = stack.querySelector(".shot-deck");
+  const cards = [...deck.querySelectorAll(".shot-card")];
+  const dots = [...stack.querySelectorAll(".shot-dot")];
+  const status = stack.querySelector(".shot-status");
+  const count = cards.length;
+  const wraps = count > 2;
+
+  // How far a side card's centre sits from the front card's, as a percentage of
+  // a card's width, for it to stick out exactly into the deck's inset.
+  const peek = STACK_INSET / (1 - 2 * STACK_INSET);
+  const sideShift = (0.5 + peek - STACK_SIDE_SCALE / 2) * 100;
+  deck.style.paddingInline = `${STACK_INSET * 100}%`;
+
+  let position = 0;
+  let active = 0;
+  let settle = null;
+
+  const normalise = (index) => ((index % count) + count) % count;
+
+  // A card's distance from the front in cards, the short way round when the
+  // stack wraps.
+  const offsetOf = (cardIndex, at) => {
+    const distance = cardIndex - at;
+    return wraps ? distance - count * Math.round(distance / count) : distance;
+  };
+
+  const stepWidth = () => cards[0].getBoundingClientRect().width * STACK_DRAG_PER_CARD || 1;
+
+  function render(at) {
+    position = at;
+    cards.forEach((card, index) => {
+      const offset = offsetOf(index, at);
+      const distance = Math.abs(offset);
+      const towardSide = Math.min(distance, 1);
+      const side = Math.sign(offset);
+      const scale = 1 - (1 - STACK_SIDE_SCALE) * towardSide;
+      // Front to side, the card dims; past the side slot it fades out behind
+      // the one there, so a card crossing to the other side never shows.
+      const opacity =
+        distance <= 1
+          ? 1 - (1 - STACK_SIDE_OPACITY) * distance
+          : Math.max(0, STACK_SIDE_OPACITY * (1.5 - distance) * 2);
+
+      card.style.transform =
+        `translateX(${side * towardSide * sideShift}%) ` +
+        `rotate(${side * towardSide * STACK_SIDE_TILT}deg) scale(${scale})`;
+      card.style.opacity = opacity;
+      card.style.zIndex = String(100 - Math.round(distance * 10));
+      card.style.visibility = opacity === 0 ? "hidden" : "";
+    });
+  }
+
+  function setActive(index) {
+    active = normalise(index);
+    cards.forEach((card, cardIndex) => {
+      const isFront = cardIndex === active;
+      card.classList.toggle("is-active", isFront);
+      card.tabIndex = isFront ? 0 : -1;
+      card.setAttribute("aria-hidden", String(!isFront));
+    });
+    dots.forEach((dot, dotIndex) => {
+      if (dotIndex === active) dot.setAttribute("aria-current", "true");
+      else dot.removeAttribute("aria-current");
+    });
+    status.textContent = `Screenshot ${active + 1} of ${count}`;
+  }
+
+  // `target` is in cards and may run past either end when the stack wraps;
+  // `velocity` is in px/s along the direction position grows.
+  function go(target, velocity = 0) {
+    settle?.stop();
+    settle = null;
+    const destination = wraps ? target : Math.max(0, Math.min(count - 1, target));
+    setActive(destination);
+
+    const rest = () => {
+      settle = null;
+      render(normalise(destination));
+    };
+
+    if (prefersReducedMotion.matches) {
+      rest();
+      return;
+    }
+
+    const step = stepWidth();
+    settle = spring({
+      from: position * step,
+      to: destination * step,
+      velocity,
+      response: 0.38,
+      // A flick earns a touch of overshoot; a click, a dot or a key does not.
+      damping: velocity ? 0.85 : 1,
+      onFrame: (pixels) => render(pixels / step),
+      onRest: rest,
+    });
+  }
+
+  // The nearest copy of `cardIndex` to where the stack is, so a wrapped stack
+  // always travels the short way round.
+  const nearest = (cardIndex) => {
+    const at = Math.round(position);
+    return at + offsetOf(cardIndex, at);
+  };
+
+  let pointerId = null;
+  let dragging = false;
+  let interrupted = false;
+  let startX = 0;
+  let startPosition = 0;
+  let trail = [];
+  let swallowClick = false;
+
+  deck.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || pointerId !== null) return;
+    pointerId = event.pointerId;
+    startX = event.clientX;
+    trail = [{ x: event.clientX, at: event.timeStamp }];
+
+    // Taking hold of a stack that is still moving starts from where it is.
+    interrupted = settle !== null;
+    settle?.stop();
+    settle = null;
+    startPosition = position;
+  });
+
+  deck.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== pointerId) return;
+
+    const travelled = event.clientX - startX;
+    if (!dragging) {
+      if (Math.abs(travelled) < DRAG_THRESHOLD) return;
+      dragging = true;
+      deck.classList.add("dragging");
+      try {
+        deck.setPointerCapture(pointerId);
+      } catch {}
+    }
+
+    trail.push({ x: event.clientX, at: event.timeStamp });
+    trail = trail.filter((point) => event.timeStamp - point.at <= VELOCITY_WINDOW);
+
+    const step = stepWidth();
+    let next = startPosition - travelled / step;
+    // Two cards don't wrap, so past either end the stack gives less and less.
+    if (!wraps) {
+      if (next < 0) next = -rubberband(-next * step, step) / step;
+      else if (next > count - 1) next = count - 1 + rubberband((next - count + 1) * step, step) / step;
+    }
+    render(next);
+  });
+
+  const finish = (event) => {
+    if (event.pointerId !== pointerId) return;
+    pointerId = null;
+
+    if (!dragging) {
+      // A click that caught the stack mid-flight lets it finish the move.
+      if (interrupted) go(Math.round(position));
+      return;
+    }
+
+    dragging = false;
+    deck.classList.remove("dragging");
+    // The click that follows a drag's pointerup is the drag, not a click.
+    swallowClick = true;
+    setTimeout(() => (swallowClick = false), 0);
+
+    const oldest = trail[0];
+    const span = (event.timeStamp - oldest.at) / 1000;
+    const pointerVelocity = span > 0 ? (event.clientX - oldest.x) / span : 0;
+    const step = stepWidth();
+
+    // Decide on where the flick was heading, one card at most either way.
+    const from = Math.round(startPosition);
+    const heading = position - project(pointerVelocity) / step;
+    const target = Math.max(from - 1, Math.min(from + 1, Math.round(heading)));
+    go(target, -pointerVelocity);
+  };
+
+  deck.addEventListener("pointerup", finish);
+  deck.addEventListener("pointercancel", finish);
+
+  deck.addEventListener("click", (event) => {
+    if (swallowClick) {
+      event.stopPropagation();
+      event.preventDefault();
+      swallowClick = false;
+      return;
+    }
+    const card = event.target.closest(".shot-card");
+    if (card && !card.classList.contains("is-active")) {
+      event.stopPropagation();
+      go(nearest(Number(card.dataset.shot)));
+    }
+  });
+
+  deck.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    go(Math.round(position) + (event.key === "ArrowRight" ? 1 : -1));
+    cards[active].focus({ preventScroll: true });
+  });
+
+  dots.forEach((dot) =>
+    dot.addEventListener("click", () => go(nearest(Number(dot.dataset.shot))))
+  );
+
+  setActive(0);
+  render(0);
 }
