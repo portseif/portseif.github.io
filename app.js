@@ -436,31 +436,17 @@ function renderWhatsNew(project) {
     </section>`;
 }
 
-// Several shots come from a screenshots.json beside the appcast, in the order
-// they show: [{ "src": "screenshots/projects.webp", "alt": "…" }, …], each src
-// relative to that repo's Pages root. Without one, or when none of its images
-// load, the single screenshot.webp/.png lookup runs, so an app with one shot
-// needs no manifest at all.
+// Several shots come from a manifest listing them in the order they show:
+// [{ "src": "screenshots/projects.webp", "alt": "…" }, …], each src relative to
+// the manifest itself. Like the icon, the one published beside the appcast
+// (screenshots.json in the releases repo) wins over one committed here
+// (screenshots/<AppName>.json). Without either, or when none of a manifest's
+// images load, the single screenshot.webp/.png lookup runs, so an app with one
+// shot needs no manifest at all.
 async function resolveScreenshots(repoPagesUrl, name) {
-  try {
-    const response = await fetch(`${repoPagesUrl}/screenshots.json`, { cache: "no-cache" });
-    if (response.ok) {
-      const entries = await response.json();
-      if (Array.isArray(entries)) {
-        const shots = await Promise.all(
-          entries
-            .filter((entry) => typeof entry?.src === "string")
-            .map(async (entry) => {
-              const image = await resolveFirstImage([new URL(entry.src, `${repoPagesUrl}/`).href]);
-              return image && { ...image, alt: typeof entry.alt === "string" ? entry.alt : "" };
-            })
-        );
-        const loaded = shots.filter(Boolean);
-        if (loaded.length) return loaded;
-      }
-    }
-  } catch {
-    // A malformed manifest is no manifest.
+  for (const manifestUrl of [`${repoPagesUrl}/screenshots.json`, `screenshots/${name}.json`]) {
+    const shots = await loadScreenshotManifest(manifestUrl);
+    if (shots.length) return shots;
   }
 
   const single = await resolveFirstImage([
@@ -470,6 +456,27 @@ async function resolveScreenshots(repoPagesUrl, name) {
     `screenshots/${name}.png`,
   ]);
   return single ? [single] : [];
+}
+
+// The shots in one manifest that load, or none when it is missing or malformed.
+async function loadScreenshotManifest(manifestUrl) {
+  try {
+    const response = await fetch(manifestUrl, { cache: "no-cache" });
+    if (!response.ok) return [];
+    const entries = await response.json();
+    if (!Array.isArray(entries)) return [];
+    const shots = await Promise.all(
+      entries
+        .filter((entry) => typeof entry?.src === "string")
+        .map(async (entry) => {
+          const image = await resolveFirstImage([new URL(entry.src, response.url).href]);
+          return image && { ...image, alt: typeof entry.alt === "string" ? entry.alt : "" };
+        })
+    );
+    return shots.filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 // Tries each candidate URL in order and resolves with the first that actually
@@ -689,9 +696,11 @@ function renderChangelog(releases) {
    transformed back onto the thumbnail's box and animated to identity, which
    keeps the whole thing on the compositor.
 
-   The radius is counter-scaled on the way in, since a 12px corner shrunk to
-   thumbnail size would otherwise land at 3px and the corners would visibly
-   grow after the move finished.
+   The corner scales with the shot: full size, the image takes the radius the
+   thumbnail's 12px corner grows to at that size, so the move animates nothing
+   but the transform, and a capture that carries the window's own rounded
+   corners (every StackMe shot) stays lined up with its frame. A fixed 12px at
+   full size sat well inside a window corner twice that.
    --------------------------------------------------------------------------- */
 
 const lightbox = document.getElementById("lightbox");
@@ -771,8 +780,7 @@ function playMorph(thumbnailRect, direction) {
   // it. A close that interrupts an open has to start from the presentation
   // value; starting from the logical one snaps the image to full size for a
   // frame before it flies back.
-  const live = getComputedStyle(lightboxImage);
-  const presentation = { transform: live.transform, borderRadius: live.borderRadius };
+  const presentation = { transform: getComputedStyle(lightboxImage).transform };
   morph?.cancel();
 
   const full = lightboxImage.getBoundingClientRect();
@@ -780,11 +788,9 @@ function playMorph(thumbnailRect, direction) {
   const offsetX = thumbnailRect.left + thumbnailRect.width / 2 - (full.left + full.width / 2);
   const offsetY = thumbnailRect.top + thumbnailRect.height / 2 - (full.top + full.height / 2);
 
-  const collapsed = {
-    transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
-    borderRadius: `${CORNER_RADIUS / scale}px`,
-  };
-  const expanded = { transform: "none", borderRadius: `${CORNER_RADIUS}px` };
+  lightboxImage.style.borderRadius = `${CORNER_RADIUS / scale}px`;
+  const collapsed = { transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})` };
+  const expanded = { transform: "none" };
   const opening = direction === "in";
 
   morph = lightboxImage.animate(opening ? [collapsed, expanded] : [presentation, collapsed], {

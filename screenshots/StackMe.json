@@ -1,0 +1,42 @@
+[
+  {
+    "src": "StackMe/01-projects.webp",
+    "alt": "The projects table, with one project's health history open"
+  },
+  {
+    "src": "StackMe/02-command-search.webp",
+    "alt": "Command search open over the workspace"
+  },
+  {
+    "src": "StackMe/03-pull-from-production.webp",
+    "alt": "Pulling files and the database from production"
+  },
+  {
+    "src": "StackMe/04-backups.webp",
+    "alt": "Backups on a calendar, with one day's scheduled backups"
+  },
+  {
+    "src": "StackMe/05-new-project.webp",
+    "alt": "Choosing a stack for a new project"
+  },
+  {
+    "src": "StackMe/06-ports.webp",
+    "alt": "The ports page with a running dev server"
+  },
+  {
+    "src": "StackMe/07-variables.webp",
+    "alt": "A project's environment variables"
+  },
+  {
+    "src": "StackMe/08-push-to-github.webp",
+    "alt": "Pushing environment variables to GitHub as Actions secrets"
+  },
+  {
+    "src": "StackMe/09-tools.webp",
+    "alt": "Installed command-line tools and their versions"
+  },
+  {
+    "src": "StackMe/10-new-filter.webp",
+    "alt": "Building a saved project filter"
+  }
+]

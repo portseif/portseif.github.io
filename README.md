@@ -30,14 +30,18 @@ Optional per-project extras, all safely skipped when missing:
 - a **screenshot**, same idea, `.webp` preferred over `.png` at each step:
   1. `screenshot.webp` / `screenshot.png` at the root of the `<Name>-releases` repo
   2. `screenshots/<AppName>.webp` / `.png` in this repo
-- **several screenshots**, from a `screenshots.json` at the root of the
-  `<Name>-releases` repo, in the order they show:
+- **several screenshots**, from a manifest listing them in the order they show:
   `[{ "src": "screenshots/projects.webp", "alt": "The projects table" }, …]`,
-  each `src` relative to that repo's Pages root. Two or more render as a fanned
+  each `src` relative to the manifest. Same idea as the icon:
+  1. `screenshots.json` at the root of the `<Name>-releases` repo
+  2. `screenshots/<AppName>.json` in this repo (StackMe's is here, with its
+     shots in `screenshots/StackMe/`)
+
+  Two or more render as a fanned
   stack (front card whole, its neighbours tucked behind and sticking out either
   side, wrapping from three up) that moves by drag, swipe, the dots or the
   arrow keys; the front card opens the lightbox. Capture them all at the same
-  size: every card takes the first one's proportions. Without the file, or if
+  size: every card takes the first one's proportions. Without a manifest, or if
   none of its images load, the single-screenshot lookup above applies.
 
 `<AppName>` is the appcast's `<channel><title>`. Both images are probed before
