@@ -284,9 +284,10 @@ body {
 }
 
 @media (min-width: 980px) {
-  /* Details beside the shot, and what is new underneath both of them. */
+  /* Details beside the shot, and what is new underneath both of them. The
+     details column stays narrow enough for the shot to carry the row. */
   .project.with-screenshot {
-    grid-template-columns: minmax(0, 31rem) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
     grid-template-areas:
       "info shot"
       "new  new";
@@ -298,8 +299,11 @@ body {
   .project.with-screenshot .project-info {
     grid-area: info;
   }
+  /* The shot is shorter than the details beside it, so it sits on their
+     middle rather than hanging from the top over an empty strip. */
   .project.with-screenshot .project-shot {
     grid-area: shot;
+    align-self: center;
   }
   .project.with-screenshot .whats-new {
     grid-area: new;
@@ -361,11 +365,17 @@ body {
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* An open hand over every card, front one included (it still opens the
+   lightbox on a click), closing as soon as the button goes down. */
+.shot-deck,
+.shot-deck .shot-card {
   cursor: grab;
 }
 
-.shot-deck.dragging,
-.shot-deck.dragging .shot-card {
+.shot-deck.pressed,
+.shot-deck.pressed .shot-card {
   cursor: grabbing;
 }
 
@@ -373,10 +383,6 @@ body {
   grid-area: 1 / 1;
   transform-origin: 50% 100%;
   will-change: transform, opacity;
-}
-
-.shot-card:not(.is-active) {
-  cursor: pointer;
 }
 
 .shot-card img {

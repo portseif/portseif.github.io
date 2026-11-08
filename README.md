@@ -40,7 +40,8 @@ Optional per-project extras, all safely skipped when missing:
   Two or more render as a fanned
   stack (front card whole, its neighbours tucked behind and sticking out either
   side, wrapping from three up) that moves by drag, swipe, the dots or the
-  arrow keys; the front card opens the lightbox. Capture them all at the same
+  arrow keys (from anywhere on the page, and inside the lightbox, which swaps
+  to the new shot); the front card opens the lightbox. Capture them all at the same
   size: every card takes the first one's proportions. Without a manifest, or if
   none of its images load, the single-screenshot lookup above applies.
 

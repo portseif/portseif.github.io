@@ -759,6 +759,17 @@ function openLightbox(trigger) {
   playMorph(from, "in");
 }
 
+// Swaps the shot the open lightbox shows (a stack's arrow keys), keeping the
+// card it closes back onto in step with it.
+function showInLightbox(trigger) {
+  shotThatOpenedLightbox?.classList.remove("shot-trigger-lifted");
+  shotThatOpenedLightbox = trigger;
+  trigger.classList.add("shot-trigger-lifted");
+  const thumbnail = trigger.querySelector("img");
+  lightboxImage.src = thumbnail.currentSrc || thumbnail.src;
+  lightboxImage.alt = thumbnail.alt;
+}
+
 function closeLightbox() {
   if (!shotThatOpenedLightbox) return;
 
@@ -1005,8 +1016,9 @@ function wirePanelDrag() {
    same spring the changelog panel uses, carrying the release velocity, and it
    moves one card per flick however hard the flick. A press that never travels
    is a click: on the front card it opens the lightbox, on a card behind it
-   brings that one forward. Arrow keys and the dots do the same for anyone not
-   dragging. Every card's place is a function of one number, the stack's
+   brings that one forward. The dots and ← / → do the same for anyone not
+   dragging; the arrows work from anywhere on the page, moving the stack in
+   view, and in the lightbox, where they swap the shot it shows. Every card's place is a function of one number, the stack's
    position in cards, so a drag, a spring and a click all just move that number.
    --------------------------------------------------------------------------- */
 
@@ -1017,7 +1029,39 @@ const STACK_SIDE_OPACITY = 0.6;
 const STACK_DRAG_PER_CARD = 0.5; // share of a card's width dragged to move one card
 
 function wireScreenshotStacks() {
-  listElement.querySelectorAll(".shot-stack").forEach(wireScreenshotStack);
+  const stacks = [...listElement.querySelectorAll(".shot-stack")].map(wireScreenshotStack);
+  if (!stacks.length) return;
+
+  const holding = (element) => element && stacks.find((stack) => stack.element.contains(element));
+
+  // The stack the most of which is on screen, if any of one is.
+  const mostInView = () => {
+    let best = null;
+    let bestVisible = 0;
+    for (const stack of stacks) {
+      const bounds = stack.element.getBoundingClientRect();
+      const visible = Math.min(bounds.bottom, innerHeight) - Math.max(bounds.top, 0);
+      if (visible > bestVisible) [best, bestVisible] = [stack, visible];
+    }
+    return best;
+  };
+
+  // ← / → from anywhere, not only once a card has focus: the stack the
+  // lightbox is showing, else the one holding focus, else the one in view.
+  // Never while typing, with a modifier (those belong to the browser), or with
+  // the changelog panel up.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+    if (changelogDialog.open) return;
+
+    const stack =
+      (lightbox.open && holding(shotThatOpenedLightbox)) || holding(document.activeElement) || mostInView();
+    if (!stack) return;
+    event.preventDefault();
+    stack.step(event.key === "ArrowRight" ? 1 : -1);
+  });
 }
 
 function wireScreenshotStack(stack) {
@@ -1035,6 +1079,10 @@ function wireScreenshotStack(stack) {
   deck.style.paddingInline = `${STACK_INSET * 100}%`;
 
   let position = 0;
+  // Where the stack is heading, in cards: the next arrow press counts from
+  // here, so quick presses each move a card instead of rounding back to where
+  // the spring happens to be mid-flight.
+  let heading = 0;
   let active = 0;
   let settle = null;
 
@@ -1094,11 +1142,13 @@ function wireScreenshotStack(stack) {
     settle?.stop();
     settle = null;
     const destination = wraps ? target : Math.max(0, Math.min(count - 1, target));
+    heading = destination;
     setActive(destination);
 
     const rest = () => {
       settle = null;
-      render(normalise(destination));
+      heading = normalise(destination);
+      render(heading);
     };
 
     if (prefersReducedMotion.matches) {
@@ -1137,6 +1187,8 @@ function wireScreenshotStack(stack) {
   deck.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || pointerId !== null) return;
     pointerId = event.pointerId;
+    // The open hand closes on the press, before any drag has begun.
+    deck.classList.add("pressed");
     startX = event.clientX;
     trail = [{ x: event.clientX, at: event.timeStamp }];
 
@@ -1154,7 +1206,6 @@ function wireScreenshotStack(stack) {
     if (!dragging) {
       if (Math.abs(travelled) < DRAG_THRESHOLD) return;
       dragging = true;
-      deck.classList.add("dragging");
       try {
         deck.setPointerCapture(pointerId);
       } catch {}
@@ -1176,6 +1227,7 @@ function wireScreenshotStack(stack) {
   const finish = (event) => {
     if (event.pointerId !== pointerId) return;
     pointerId = null;
+    deck.classList.remove("pressed");
 
     if (!dragging) {
       // A click that caught the stack mid-flight lets it finish the move.
@@ -1184,7 +1236,6 @@ function wireScreenshotStack(stack) {
     }
 
     dragging = false;
-    deck.classList.remove("dragging");
     // The click that follows a drag's pointerup is the drag, not a click.
     swallowClick = true;
     setTimeout(() => (swallowClick = false), 0);
@@ -1196,13 +1247,15 @@ function wireScreenshotStack(stack) {
 
     // Decide on where the flick was heading, one card at most either way.
     const from = Math.round(startPosition);
-    const heading = position - project(pointerVelocity) / step;
-    const target = Math.max(from - 1, Math.min(from + 1, Math.round(heading)));
+    const flickedTo = position - project(pointerVelocity) / step;
+    const target = Math.max(from - 1, Math.min(from + 1, Math.round(flickedTo)));
     go(target, -pointerVelocity);
   };
 
-  deck.addEventListener("pointerup", finish);
-  deck.addEventListener("pointercancel", finish);
+  // On the window, so a press let go outside the deck before it became a drag
+  // (no capture yet) still ends, and the hand opens again.
+  addEventListener("pointerup", finish);
+  addEventListener("pointercancel", finish);
 
   deck.addEventListener("click", (event) => {
     if (swallowClick) {
@@ -1218,17 +1271,22 @@ function wireScreenshotStack(stack) {
     }
   });
 
-  deck.addEventListener("keydown", (event) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    go(Math.round(position) + (event.key === "ArrowRight" ? 1 : -1));
-    cards[active].focus({ preventScroll: true });
-  });
-
   dots.forEach((dot) =>
     dot.addEventListener("click", () => go(nearest(Number(dot.dataset.shot))))
   );
 
+  // One card along, from the arrow keys. The lightbox, when it is showing this
+  // stack, swaps to the new front card; focus on a card follows it (the old
+  // one leaves the tab order).
+  function step(delta) {
+    const hadFocus = cards.includes(document.activeElement);
+    go(heading + delta);
+    const front = cards[active];
+    if (lightbox.open && cards.includes(shotThatOpenedLightbox)) showInLightbox(front);
+    else if (hadFocus) front.focus({ preventScroll: true });
+  }
+
   setActive(0);
   render(0);
+  return { element: stack, step };
 }
