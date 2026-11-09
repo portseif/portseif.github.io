@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`portseif.github.io` — a static GitHub Pages landing page that lists Chris's Mac apps with downloads and release notes. Three hand-written files do everything: `index.html`, `styles.css`, `app.js`. No build step, no package manager, no framework, no tests, no linter. `.nojekyll` makes Pages serve the files as-is, and pushing `main` deploys.
+`portseif.github.io` — a static GitHub Pages landing page that lists Chris's apps with downloads and release notes. Three hand-written files do everything: `index.html`, `styles.css`, `app.js`. No build step, no package manager, no framework, no tests, no linter. `.nojekyll` makes Pages serve the files as-is, and pushing `main` deploys.
 
 `README.md` is the design record (accent rules, the Catalyst-style button, motion curves, a11y fallbacks, the changelog panel). Read it before changing visual or interaction behavior, and update it in the same change when behavior it describes moves — recent commits touch `README.md` alongside `app.js`/`styles.css` for exactly this reason.
 
@@ -26,7 +26,7 @@ Nothing per-app is configured here. `main()`:
 4. Entries render as template-literal HTML; every interpolated value goes through `escapeHtml()`.
 5. Only after render are the `wire*()` functions called. They use event delegation on `#project-list`, so new markup inside entries doesn't need its own listeners.
 
-For appcast apps the full changelog comes from `<repo>/CHANGELOG.md` on Pages, fetched lazily on first panel open and cached per app. `parseChangelog()` only understands `### vX.Y.Z (date)` headings and `- ` bullets. The "Added"/"Fixed" split in "What's new" is inferred from each note's leading verb via `REPAIR_VERBS`, and only for appcast notes (`notesLeadWithVerb`); GitHub Release notes are prose and render as one unlabelled card.
+For appcast apps the full changelog comes from `<repo>/CHANGELOG.md` on Pages, fetched lazily on first panel open and cached per app. `parseChangelog()` only understands `### vX.Y.Z (date)` headings and `- ` bullets. The "Added"/"Fixed" split in "What's new" is inferred from each note's leading verb (`REPAIR_VERBS`) or, for sentence-style GitHub Release notes, from phrases like "used to"/"no longer"/"again" (`REPAIR_PHRASES`). A GitHub Release's summary paragraph renders under the heading (`releaseSummary`) and only its bullets are split.
 
 The rate limit makes local testing awkward: a fresh browser profile on a spent network shows only the limit message. Seed `localStorage` with the trimmed API answers (shape `{ savedAt, data }`, keys `release-repos.v2` and `releases.v1:<repo>`) fetched with an authenticated `gh api` to exercise the page anyway.
 
@@ -35,6 +35,7 @@ The rate limit makes local testing awkward: a fresh browser profile on a spent n
 - **`main()` is called near the top of the file**, before most `const`s are declared. Anything `main()` touches synchronously before its first `await` (e.g. `REPOS_CACHE_KEY`) must be declared above the `main();` call or it hits the temporal dead zone. Constants used only after an `await` can live further down.
 - **Shared motion primitives**: `spring()` (Apple-style `response`/`damping`, re-targetable with carried velocity), `project()` (flick end point via scroll-view exponential decay), `rubberband()`, plus `DRAG_THRESHOLD`/`VELOCITY_WINDOW`/`prefersReducedMotion`. Both the changelog panel's touch-flick dismiss and the screenshot stack use them — reuse rather than adding a second spring or easing helper. No animation library is loaded, by design.
 - **Screenshot stack**: every card's transform/opacity/z-index is a pure function of one number, `position` (in cards), via `render(at)`. Drags, springs, dots, clicks and arrow keys all just move that number through `go()`. `heading` tracks the destination so rapid key presses each advance a card. Stacks with 3+ cards wrap; 2 cards rubber-band at the ends. Global ←/→ targets the lightbox's stack, else the focused stack, else the one most in view, and are ignored while the changelog is open.
+- **Contents (`#toc`)**: filled by `wireToc()` once there are 2+ apps, which also adds `html.has-toc`; CSS only shows it at ≥75rem. Links are `#<slugOf(name)>` anchors to each `.project` (which has `scroll-margin-top` for the sticky header). The active link gets `aria-current`; a rAF-throttled scroll handler picks the last entry past 40% of the window, or the last entry at the bottom of the page. `.has-toc .page` and `.chrome-inner` share a `padding-left` formula that keeps content clear of the fixed list.
 - **Two native `<dialog>`s** (`#changelog`, `#lightbox`) opened with `showModal()`. Both toggle `html.panel-open`. The lightbox overrides `cancel` (Escape) so it plays a FLIP morph back to the thumbnail instead of closing instantly; `playMorph()` reads the computed transform before cancelling so interrupted morphs don't snap. Focus returns to the trigger on close.
 - **Changelog panel drag is touch-only**, gated per event on `pointerType !== "mouse"` (not at startup), so touchscreen laptops work with either input.
 

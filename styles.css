@@ -25,6 +25,9 @@
   --hairline: rgba(23, 24, 26, 0.08);
   --skeleton: #eceae6;
   --shot-shadow: rgba(23, 24, 26, 0.13);
+  /* The dot beside the app in view in the contents. A warm neutral, not the
+     accent, which stays with the download button. 3.7:1 on the page. */
+  --toc-marker: #a27a45;
   /* Frosted glass. The tint alone cannot carry the text, since a dark app
      screenshot can sit right behind the panel, so the filter does the work.
      Light needs its floor lifted before anything else: brightness() multiplies,
@@ -78,6 +81,7 @@
     --hairline: rgba(255, 255, 255, 0.09);
     --skeleton: #1e1f23;
     --shot-shadow: rgba(0, 0, 0, 0.5);
+    --toc-marker: #c9a87c;
     /* Dark needs no floor lift, since its danger is a bright backdrop rather
        than a black one, so contrast is left alone and only the level comes
        down. Leaving contrast alone is also what keeps the shapes behind the
@@ -250,6 +254,89 @@ body {
   font-weight: 700;
 }
 
+/* --- Contents. The apps down the far left, the way a settings sidebar lists
+       its panes: the one in view in full text colour with a dot beside it,
+       the rest muted. Wide screens only; app.js adds .has-toc once there are
+       two apps to list. --- */
+.toc {
+  display: none;
+}
+
+@media (min-width: 75rem) {
+  .has-toc .toc {
+    display: block;
+    position: fixed;
+    top: 8rem; /* the header plus the page's top padding: level with the title */
+    left: 1.5rem;
+    width: 9rem;
+  }
+
+  /* The list takes 12rem from the window's left edge. Where the margin beside
+     the 76rem column is narrower than that, the column's own left padding
+     grows by the difference, so the two never touch. The header's row is the
+     same 76rem box and moves with it, so the name still lines up with the
+     content under it. */
+  .has-toc .page,
+  .has-toc .chrome-inner {
+    padding-left: max(1.5rem, calc(12rem - max(0px, (100vw - 76rem) / 2)));
+  }
+}
+
+.toc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toc-link {
+  position: relative;
+  display: block;
+  padding: 0.1875rem 0 0.1875rem 1.375rem;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  font-weight: 510;
+  line-height: 1.5;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+/* The dot sits in the gutter left of the name and grows in rather than
+   blinking on, so the eye can follow it from one app to the next. */
+.toc-link::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0.4375rem;
+  width: 0.375rem;
+  height: 0.375rem;
+  margin-top: -0.1875rem;
+  border-radius: 50%;
+  background: var(--toc-marker);
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 0.2s ease,
+    transform 0.25s var(--ease-out);
+}
+
+.toc-link[aria-current] {
+  color: var(--text);
+}
+
+.toc-link[aria-current]::before {
+  opacity: 1;
+  transform: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .toc-link:not([aria-current]):hover {
+    color: var(--text-body);
+  }
+}
+
 /* --- App entries.
 
    Base layout: the icon holds the left edge and everything else aligns to the
@@ -263,6 +350,8 @@ body {
   display: grid;
   gap: 2.5rem;
   padding-bottom: 5rem;
+  /* A jump from the contents lands clear of the sticky header. */
+  scroll-margin-top: 5rem;
 }
 
 .project + .project {
@@ -734,6 +823,14 @@ body {
   margin: 0.375rem 0 0;
   color: var(--text-muted);
   font-size: 0.9375rem;
+}
+
+/* A release's own summary line, for apps whose notes come from GitHub
+   Releases, introducing the Added and Fixed lists under it. */
+.whats-new-summary {
+  max-width: var(--measure);
+  margin: 0.75rem 0 0;
+  color: var(--text-body);
 }
 
 .whats-new-columns {
@@ -1381,6 +1478,10 @@ html::-webkit-scrollbar-thumb,
   .release {
     animation: fade 200ms ease backwards;
     animation-delay: 0ms;
+  }
+
+  .toc-link::before {
+    transform: none;
   }
 
   .changelog,

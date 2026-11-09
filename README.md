@@ -1,6 +1,6 @@
 # portseif.github.io
 
-Landing page listing my Mac apps and their downloads.
+Landing page listing my apps and their downloads.
 
 ## How it finds projects
 
@@ -22,15 +22,20 @@ reads the repo's releases from the API:
   whose releases carry no disk image (Wheelhouse's zip) stays off the page
 - the name comes from the `.dmg` file name, `<productName>-<version>…`, and
   the size from the Apple silicon `.dmg` when there is one
+- **Requires** says "any OS" when the release also carries a Windows or Linux
+  installer (`.exe`, `.msi`, `.AppImage`, `.deb`, `.rpm`). A `.dmg` alone says
+  nothing about the macOS it needs, so then the row is left out.
 - **Download** goes to the repo's website (the Website field on GitHub) when
   it has one, opening in a new tab since it's a page, not a file. That's how
   an app with separate Apple silicon and Intel builds sends people to a page
   offering both. Without one it's the `.dmg` itself.
 - the notes are the release body up to the download list, the first list
   naming one of the release's files, minus the line leading into it. Each
-  paragraph and each bullet is one note. They're prose rather than verb-led,
-  so "What's new" shows them as one unlabelled card instead of splitting
-  them into Added and Fixed.
+  paragraph and each bullet is one note in the changelog. In "What's new" the
+  summary paragraph sits under the heading and the bullets are split into
+  Added and Fixed. They're sentences rather than verb-led, so besides the
+  opening verb the split looks for how a repair describes the old behaviour:
+  "used to", "no longer", "again", "fixes", or "before" ending a clause.
 - the changelog panel is built from every release in the same answer, so it
   costs no request of its own, and its GitHub link goes to the releases page
 
@@ -127,6 +132,15 @@ supplies the radius, border and shadow instead. WebP took it from 348 KB to
   plain cross-fade rather than removing the feedback entirely.
 - One radius scale, one `z-index` (the sticky header), hairline dividers rather
   than boxed cards, so the list reads the same with one app or ten.
+- **Contents down the left.** From two apps up and at 1200px or wider, the
+  app names are listed down the far left like a settings sidebar: the one in
+  view in full text colour with a dot beside it, the rest muted. They're plain
+  links to each entry, so they set the address and use the page's own smooth
+  scroll. The app in view is the last one whose top has passed 40% of the way
+  down the window, or the last one once the page can't scroll further. Where
+  the margin beside the content is too narrow for the list, the content and
+  the header both move right to make room. The dot is a warm neutral rather
+  than the accent, which stays with Download.
 
 ## Changelog panel
 

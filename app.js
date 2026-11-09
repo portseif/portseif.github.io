@@ -103,6 +103,7 @@ async function main() {
   wirePanelDrag();
   wireLightbox();
   wireScreenshotStacks();
+  wireToc(projects);
 }
 
 function fetchReleaseRepos() {
@@ -253,13 +254,14 @@ async function readAppcastRelease(repo, repoPagesUrl) {
     name: appcast.querySelector("channel > title")?.textContent?.trim() || "",
     version:
       sparkleText(latestItem, "shortVersionString") || sparkleText(latestItem, "version") || "",
-    minimumSystemVersion: sparkleText(latestItem, "minimumSystemVersion"),
+    requires: sparkleText(latestItem, "minimumSystemVersion")
+      ? `macOS ${sparkleText(latestItem, "minimumSystemVersion")}`
+      : "",
     downloadUrl,
     downloadIsPage: false,
     downloadBytes: Number(enclosure.getAttribute("length")) || 0,
+    releaseSummary: "",
     releaseNotes: extractReleaseNotes(latestItem.querySelector("description")?.textContent || ""),
-    // Sparkle notes lead with a verb, which is what the Added/Fixed split reads.
-    notesLeadWithVerb: true,
     publishedDate: publishedText ? new Date(publishedText) : null,
     changelogUrl: `${repo.html_url}/blob/${repo.default_branch}/CHANGELOG.md`,
     changelogSource: `${repoPagesUrl}/CHANGELOG.md`,
@@ -303,24 +305,35 @@ async function readGitHubRelease(repo) {
   const diskImage = diskImageOf(latest);
   const version = versionOf(latest);
 
+  // The summary line above a release's bullets introduces them, so on the
+  // page it sits under the heading and the bullets are what get sorted into
+  // Added and Fixed. A release that is only a paragraph or two shows those.
+  const latestNotes = notesOf(latest);
+  const bullets = latestNotes.filter((note) => note.bullet).map((note) => note.text);
+  const paragraphs = latestNotes.filter((note) => !note.bullet).map((note) => note.text);
+
   return {
     // electron-builder names its files "<productName>-<version>…", which is
     // the app's own capitalisation rather than the repo's.
     name: diskImage.name.includes(`-${version}`) ? diskImage.name.split(`-${version}`)[0] : "",
     version,
-    minimumSystemVersion: "",
+    // A release that also ships a Windows or Linux installer runs anywhere.
+    // One with only a disk image says nothing about which macOS it needs.
+    requires: latest.assets.some((asset) => /\.(exe|msi|appimage|deb|rpm)$/i.test(asset.name))
+      ? "any OS"
+      : "",
     downloadUrl: repo.homepage || diskImage.browser_download_url,
     downloadIsPage: Boolean(repo.homepage),
     downloadBytes: diskImage.size || 0,
-    releaseNotes: notesOf(latest).slice(0, MAX_RELEASE_NOTES),
-    notesLeadWithVerb: false,
+    releaseSummary: bullets.length ? paragraphs.join(" ") : "",
+    releaseNotes: (bullets.length ? bullets : paragraphs).slice(0, MAX_RELEASE_NOTES),
     publishedDate: latest.published_at ? new Date(latest.published_at) : null,
     changelogUrl: `${repo.html_url}/releases`,
     changelog: releases
       .map((release) => ({
         label: versionOf(release),
         date: release.published_at || "",
-        notes: notesOf(release),
+        notes: notesOf(release).map((note) => note.text),
       }))
       .filter((release) => release.notes.length > 0),
   };
@@ -332,7 +345,8 @@ async function readGitHubRelease(repo) {
 // of the release's own files; it, the line leading into it ("Pick the file
 // for your computer:") and everything after are left out. What comes before
 // it is the notes: each paragraph one note, since a summary line is what makes
-// the bullets under it make sense, and each bullet one note.
+// the bullets under it make sense, and each bullet one note, in order and
+// marked as which they are.
 function releaseNotesFromMarkdown(markdown, assetNames) {
   const blocks = markdown
     .replace(/\r\n?/g, "\n")
@@ -359,9 +373,12 @@ function releaseNotesFromMarkdown(markdown, assetNames) {
 
   return blocks
     .slice(0, end)
-    .flatMap((block) => (isList(block) ? listItems(block) : [block.replace(/\s*\n\s*/g, " ")]))
-    .map(markdownToText)
-    .filter(Boolean);
+    .flatMap((block) =>
+      isList(block)
+        ? listItems(block).map((text) => ({ text: markdownToText(text), bullet: true }))
+        : [{ text: markdownToText(block.replace(/\s*\n\s*/g, " ")), bullet: false }]
+    )
+    .filter((note) => note.text);
 }
 
 // Notes render as text, so links keep their words and emphasis loses its marks.
@@ -416,6 +433,7 @@ function extractReleaseNotes(descriptionHtml) {
 function buildProjectEntry(project, index) {
   const entry = document.createElement("article");
   entry.className = project.screenshots.length ? "project with-screenshot" : "project";
+  entry.id = slugOf(project.name);
   entry.style.setProperty("--index", index);
 
   const specs = [];
@@ -431,7 +449,7 @@ function buildProjectEntry(project, index) {
     ]);
   }
   if (project.downloadBytes) specs.push(["Size", formatBytes(project.downloadBytes)]);
-  if (project.minimumSystemVersion) specs.push(["Requires", `macOS ${project.minimumSystemVersion}`]);
+  if (project.requires) specs.push(["Requires", project.requires]);
 
   entry.innerHTML = `
     <div class="project-info">
@@ -544,28 +562,29 @@ function renderScreenshots(project, index) {
 const REPAIR_VERBS =
   /^(fix|remove|cap|drop|stop|prevent|correct|quiet|speed|tidy|clean|restore|revert|gate|harden|reduce|avoid|guard|no longer|resolve)\b/i;
 
+// Notes written as sentences ("In Findings, the Select button stays in view")
+// have no opening verb to go by, but a repair still gives itself away in how
+// it talks about the old behaviour: it used to, it no longer does, it works
+// again, it read differently before.
+const REPAIR_PHRASES = /\b(used to|no longer|again|fix(?:es|ed)?)\b|\bbefore[,.;]/i;
+
 function splitReleaseNotes(notes) {
   const added = [];
   const fixed = [];
-  for (const note of notes) (REPAIR_VERBS.test(note) ? fixed : added).push(note);
+  for (const note of notes) {
+    (REPAIR_VERBS.test(note) || REPAIR_PHRASES.test(note) ? fixed : added).push(note);
+  }
   return { added, fixed };
 }
 
 function renderWhatsNew(project) {
   if (!project.releaseNotes.length) return "";
 
-  // Notes written as prose ("In Findings, the Select button stays in view")
-  // have no opening verb to sort by, so they stay one unlabelled group rather
-  // than all landing under Added.
-  const { added, fixed } = project.notesLeadWithVerb
-    ? splitReleaseNotes(project.releaseNotes)
-    : { added: project.releaseNotes, fixed: [] };
-  const label = (text) =>
-    project.notesLeadWithVerb ? `<h4 class="whats-new-label">${text}</h4>` : "";
-  const column = (heading, notes, icon) =>
+  const { added, fixed } = splitReleaseNotes(project.releaseNotes);
+  const column = (label, notes, icon) =>
     notes.length
       ? `<section class="whats-new-group">
-           ${label(heading)}
+           <h4 class="whats-new-label">${label}</h4>
            <ul class="note-card">
              ${notes.map((note) => `<li>${icon}<span>${escapeHtml(note)}</span></li>`).join("")}
            </ul>
@@ -590,13 +609,18 @@ function renderWhatsNew(project) {
                 )}</p>`
               : ""
           }
+          ${
+            project.releaseSummary
+              ? `<p class="whats-new-summary">${escapeHtml(project.releaseSummary)}</p>`
+              : ""
+          }
         </div>
         <button class="link-arrow" type="button" data-changelog="${escapeHtml(project.name)}">
           Full changelog${CHEVRON_ICON}
         </button>
       </header>
       <div class="whats-new-columns">
-        ${column("Added", added, project.notesLeadWithVerb ? PLUS_ICON : "")}
+        ${column("Added", added, PLUS_ICON)}
         ${column("Fixed", fixed, WRENCH_ICON)}
       </div>
     </section>`;
@@ -677,6 +701,14 @@ function formatBytes(bytes) {
 function showStatus(html) {
   listElement.removeAttribute("aria-busy");
   listElement.innerHTML = `<p class="status">${html}</p>`;
+}
+
+// An entry's id, which the table of contents links to: "StackMe" → "stackme".
+function slugOf(name) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function escapeHtml(value) {
@@ -1461,4 +1493,67 @@ function wireScreenshotStack(stack) {
   setActive(0);
   render(0);
   return { element: stack, step };
+}
+
+
+/* ---------------------------------------------------------------------------
+   Table of contents.
+
+   The apps listed down the far left on wide screens, styled like a settings
+   sidebar: the one in view in full text colour with a dot beside it, the rest
+   muted. They are plain in-page links, so they keep working without this
+   script's help, put the app in the address bar, and scroll with the page's
+   own smooth scrolling (which reduced motion turns off). One app needs no
+   contents, so the list only appears from two.
+
+   The app in view is the last one whose top has passed a line 40% of the way
+   down the window, or the last one once the page can scroll no further: a
+   short last entry may never reach the line, and the dot should still get
+   there when the reader does.
+   --------------------------------------------------------------------------- */
+
+const tocElement = document.getElementById("toc");
+const TOC_LINE = 0.4; // share of the window's height
+
+function wireToc(projects) {
+  if (projects.length < 2) return;
+
+  const tocList = tocElement.querySelector(".toc-list");
+  tocList.innerHTML = projects
+    .map(
+      (project) =>
+        `<li><a class="toc-link" href="#${slugOf(project.name)}">${escapeHtml(project.name)}</a></li>`
+    )
+    .join("");
+  document.documentElement.classList.add("has-toc");
+
+  const entries = [...listElement.querySelectorAll(".project")];
+  const links = [...tocList.querySelectorAll(".toc-link")];
+  let current = -1;
+  let frame = 0;
+
+  const update = () => {
+    frame = 0;
+    const scroller = document.documentElement;
+    let index = 0;
+    if (innerHeight + scroller.scrollTop >= scroller.scrollHeight - 2) {
+      index = entries.length - 1;
+    } else {
+      entries.forEach((entry, entryIndex) => {
+        if (entry.getBoundingClientRect().top <= innerHeight * TOC_LINE) index = entryIndex;
+      });
+    }
+    if (index === current) return;
+    links[current]?.removeAttribute("aria-current");
+    links[index].setAttribute("aria-current", "true");
+    current = index;
+  };
+
+  // At most once a frame, however fast the scroll events come.
+  const schedule = () => {
+    frame ||= requestAnimationFrame(update);
+  };
+  addEventListener("scroll", schedule, { passive: true });
+  addEventListener("resize", schedule);
+  update();
 }
