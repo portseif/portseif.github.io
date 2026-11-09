@@ -22,6 +22,9 @@ const MAX_RELEASE_NOTES = 5;
 const REPOS_CACHE_KEY = "release-repos.v2";
 const RELEASES_CACHE_PREFIX = "releases.v1:";
 const API_CACHE_FRESH_MS = 60 * 60 * 1000;
+// How many apps the page showed last time, for the loading placeholders. Up
+// here for the same reason: main() reads it before its first await.
+const APP_COUNT_KEY = "app-count.v1";
 
 // Lucide's arrow-down-to-line, stroked at 2.5 to sit at the same weight as the
 // other icons on the page rather than Lucide's own 2. It ships the shaft, the
@@ -71,6 +74,8 @@ const listElement = document.getElementById("project-list");
 main();
 
 async function main() {
+  showSkeletons();
+
   let releaseRepos;
   try {
     releaseRepos = await fetchReleaseRepos();
@@ -98,6 +103,9 @@ async function main() {
   listElement.innerHTML = "";
   listElement.removeAttribute("aria-busy");
   listElement.append(fragment);
+  try {
+    localStorage.setItem(APP_COUNT_KEY, String(projects.length));
+  } catch {}
 
   wireChangelogPanel();
   wirePanelDrag();
@@ -542,13 +550,11 @@ function renderScreenshots(project, index) {
            )
            .join("")}
        </div>
-       <div class="shot-dots">
+       <div class="shot-dots" role="slider" tabindex="0"
+            aria-label="${escapeHtml(project.name)} screenshot"
+            aria-valuemin="1" aria-valuemax="${shots.length}">
          ${shots
-           .map(
-             (_, position) =>
-               `<button class="shot-dot" type="button" data-shot="${position}"
-                        aria-label="Show screenshot ${position + 1}"></button>`
-           )
+           .map((_, position) => `<span class="shot-dot" data-shot="${position}"></span>`)
            .join("")}
        </div>
        <p class="sr-only shot-status" aria-live="polite"></p>
@@ -696,6 +702,18 @@ function resolveFirstImage(candidateUrls) {
 function formatBytes(bytes) {
   const megabytes = bytes / 1024 / 1024;
   return megabytes >= 100 ? `${Math.round(megabytes)} MB` : `${megabytes.toFixed(1)} MB`;
+}
+
+// One placeholder entry per app the page showed last time, so it doesn't load
+// as one entry and then grow into two. A first visit, or one with storage off,
+// keeps the single placeholder index.html starts with.
+function showSkeletons() {
+  let count = 1;
+  try {
+    count = Number(localStorage.getItem(APP_COUNT_KEY)) || 1;
+  } catch {}
+  const skeleton = listElement.querySelector(".skeleton");
+  skeleton.after(...Array.from({ length: count - 1 }, () => skeleton.cloneNode(true)));
 }
 
 function showStatus(html) {
@@ -1222,8 +1240,12 @@ function wirePanelDrag() {
    is a click: on the front card it opens the lightbox, on a card behind it
    brings that one forward. The dots and ← / → do the same for anyone not
    dragging; the arrows work from anywhere on the page, moving the stack in
-   view, and in the lightbox, where they swap the shot it shows. Every card's place is a function of one number, the stack's
-   position in cards, so a drag, a spring and a click all just move that number.
+   view, and in the lightbox, where they swap the shot it shows. A sideways
+   two-finger swipe on a trackpad moves one card too. To a screen reader the
+   dots are one slider, so VoiceOver on an iPhone moves the stack with a swipe
+   up or down, as it does a page control. Every card's place is a function of
+   one number, the stack's position in cards, so a drag, a spring and a click
+   all just move that number.
    --------------------------------------------------------------------------- */
 
 const STACK_INSET = 0.06; // share of the deck each side left for a peeking card
@@ -1231,6 +1253,9 @@ const STACK_SIDE_SCALE = 0.9;
 const STACK_SIDE_TILT = 2; // degrees, pivoting on the card's bottom edge
 const STACK_SIDE_OPACITY = 0.6;
 const STACK_DRAG_PER_CARD = 0.5; // share of a card's width dragged to move one card
+const WHEEL_SWIPE_DISTANCE = 30; // px sideways before a trackpad swipe moves a card
+const WHEEL_SWIPE_GAP = 120; // ms without a wheel event that ends a swipe
+const SLIDER_STEPS = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 };
 
 function wireScreenshotStacks() {
   const stacks = [...listElement.querySelectorAll(".shot-stack")].map(wireScreenshotStack);
@@ -1271,7 +1296,8 @@ function wireScreenshotStacks() {
 function wireScreenshotStack(stack) {
   const deck = stack.querySelector(".shot-deck");
   const cards = [...deck.querySelectorAll(".shot-card")];
-  const dots = [...stack.querySelectorAll(".shot-dot")];
+  const slider = stack.querySelector(".shot-dots");
+  const dots = [...slider.querySelectorAll(".shot-dot")];
   const status = stack.querySelector(".shot-status");
   const count = cards.length;
   const wraps = count > 2;
@@ -1289,6 +1315,9 @@ function wireScreenshotStack(stack) {
   let heading = 0;
   let active = 0;
   let settle = null;
+  // Off while the slider itself moves the stack: a screen reader already reads
+  // out the slider's new value, and the live region would say it twice.
+  let announce = true;
 
   const normalise = (index) => ((index % count) + count) % count;
 
@@ -1337,7 +1366,12 @@ function wireScreenshotStack(stack) {
       if (dotIndex === active) dot.setAttribute("aria-current", "true");
       else dot.removeAttribute("aria-current");
     });
-    status.textContent = `Screenshot ${active + 1} of ${count}`;
+    slider.setAttribute("aria-valuenow", String(active + 1));
+    slider.setAttribute(
+      "aria-valuetext",
+      `${active + 1} of ${count}: ${cards[active].querySelector("img").alt}`
+    );
+    status.textContent = announce ? `Screenshot ${active + 1} of ${count}` : "";
   }
 
   // `target` is in cards and may run past either end when the stack wraps;
@@ -1489,6 +1523,72 @@ function wireScreenshotStack(stack) {
     if (lightbox.open && cards.includes(shotThatOpenedLightbox)) showInLightbox(front);
     else if (hadFocus) front.focus({ preventScroll: true });
   }
+
+  // The dots are one slider, the way a page control is one adjustable element
+  // on iOS. When VoiceOver's swipe up or down (or any screen reader's
+  // increment) lands on an ARIA slider, WebKit and Chromium both send it a real
+  // → or ← keydown and leave the value to the page (WebKit's
+  // postKeyboardKeysForValueChange, Chromium's AlterSliderOrSpinButtonValue),
+  // so the keys are the whole contract. ↑ / ↓ and Home / End are the rest of a
+  // slider's keyboard, for anyone tabbing to it. Handled here rather than by
+  // the page-wide arrows, which would move whichever stack is most in view.
+  slider.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const delta = SLIDER_STEPS[event.key];
+    const end = event.key === "Home" ? 0 : event.key === "End" ? count - 1 : null;
+    if (!delta && end === null) return;
+    event.preventDefault();
+    announce = false;
+    if (delta) step(delta);
+    else go(nearest(end));
+    announce = true;
+  });
+
+  // A sideways two-finger swipe moves one card however far it goes, like a
+  // flick. Whether a swipe is the stack's or the page's is settled by its
+  // first event, mostly sideways or not, because browsers only let a gesture's
+  // first wheel event be cancelled (cancelling it is also what keeps Safari
+  // from taking the swipe as Back). The momentum that follows the fingers lifting
+  // is still the same swipe, until the events stop. A pinch arrives as a wheel
+  // event with ctrlKey and stays the browser's zoom.
+  let swipe = null;
+  let lastWheelAt = -Infinity;
+
+  stack.addEventListener(
+    "wheel",
+    (event) => {
+      if (event.ctrlKey || pointerId !== null) return;
+      if (event.timeStamp - lastWheelAt > WHEEL_SWIPE_GAP) swipe = null;
+      lastWheelAt = event.timeStamp;
+
+      const unit =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? innerWidth
+            : 1;
+      const dx = event.deltaX * unit;
+      const dy = event.deltaY * unit;
+      if (!swipe) {
+        if (!dx && !dy) return;
+        swipe = { ours: event.cancelable && Math.abs(dx) > Math.abs(dy), travel: 0, moved: false };
+      }
+      if (!swipe.ours) return;
+      event.preventDefault();
+
+      // Momentum never turns round, so a swipe back is a new one.
+      if (swipe.moved && dx && Math.sign(dx) !== Math.sign(swipe.travel)) {
+        swipe.travel = 0;
+        swipe.moved = false;
+      }
+      if (swipe.moved) return;
+      swipe.travel += dx;
+      if (Math.abs(swipe.travel) < WHEEL_SWIPE_DISTANCE) return;
+      swipe.moved = true;
+      step(Math.sign(swipe.travel));
+    },
+    { passive: false }
+  );
 
   setActive(0);
   render(0);

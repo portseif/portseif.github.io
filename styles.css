@@ -150,7 +150,7 @@ body {
   white-space: nowrap;
 }
 
-:where(a, button):focus-visible {
+:where(a, button, [role="slider"]):focus-visible {
   outline: 2px solid var(--accent-fill);
   outline-offset: 3px;
   border-radius: var(--radius-sm);
@@ -480,11 +480,13 @@ body {
   -webkit-user-drag: none;
 }
 
+/* One slider to a screen reader (see app.js), so it's one tab stop, and only as
+   wide as its dots for the focus ring to sit around them. */
 .shot-dots {
   display: flex;
-  justify-content: center;
   gap: 0.125rem;
-  margin-top: 1rem;
+  width: fit-content;
+  margin: 1rem auto 0;
 }
 
 /* A 6px dot in a 24px hit area. */
@@ -493,10 +495,6 @@ body {
   place-items: center;
   width: 1.5rem;
   height: 1.5rem;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: none;
   cursor: pointer;
 }
 
@@ -940,6 +938,13 @@ body {
     grid-template-columns: 5.5rem minmax(0, 1fr);
     gap: 2rem;
   }
+}
+
+/* One per app, divided the way the entries they stand in for are. */
+.skeleton + .skeleton {
+  margin-top: 5rem;
+  padding-top: 5rem;
+  border-top: 1px solid var(--rule);
 }
 
 .skeleton-icon {

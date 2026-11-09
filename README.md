@@ -48,6 +48,10 @@ limit, an outage) the last copy is used whatever its age. A new app can take
 up to an hour to show for someone who visited recently. A first visit from a
 network that has spent its limit says when it resets.
 
+While it loads, the page shows one placeholder entry per app it listed last
+time (that count is kept in `localStorage` too), so it doesn't load as one
+entry and then grow into two. A first visit shows one.
+
 Optional per-project extras, all safely skipped when missing:
 
 - the repo description becomes the one-line blurb under the app name
@@ -67,9 +71,13 @@ Optional per-project extras, all safely skipped when missing:
 
   Two or more render as a fanned
   stack (front card whole, its neighbours tucked behind and sticking out either
-  side, wrapping from three up) that moves by drag, swipe, the dots or the
-  arrow keys (from anywhere on the page, and inside the lightbox, which swaps
-  to the new shot); the front card opens the lightbox. Capture them all at the same
+  side, wrapping from three up) that moves by drag, swipe (a finger, or two
+  sideways on a trackpad, one card a swipe), the dots or the arrow keys (from
+  anywhere on the page, and inside the lightbox, which swaps to the new shot);
+  the front card opens the lightbox. To a screen reader the dots are one
+  slider, the way iOS treats a page control, so VoiceOver on an iPhone moves
+  the stack with a swipe up or down and reads out the new shot's description.
+  Capture them all at the same
   size: every card takes the first one's proportions. Without a manifest, or if
   none of its images load, the single-screenshot lookup above applies.
 
