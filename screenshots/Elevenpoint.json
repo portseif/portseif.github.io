@@ -1,0 +1,22 @@
+[
+  {
+    "src": "Elevenpoint/01-project.webp",
+    "alt": "A project's score and the rules to fix first"
+  },
+  {
+    "src": "Elevenpoint/02-findings.webp",
+    "alt": "A color contrast failure open beside the list of findings"
+  },
+  {
+    "src": "Elevenpoint/03-what-changed.webp",
+    "alt": "What changed between two scans, matched finding by finding"
+  },
+  {
+    "src": "Elevenpoint/04-reports.webp",
+    "alt": "Setting up a client report next to a preview of the file"
+  },
+  {
+    "src": "Elevenpoint/05-home.webp",
+    "alt": "The home screen, where you paste a site's address to scan it"
+  }
+]

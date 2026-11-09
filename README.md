@@ -80,8 +80,15 @@ image's intrinsic size, so the markup reserves exactly the right space for any
 aspect ratio and nothing shifts as it loads.
 
 `icons/StackMe.png` was extracted from `AppIcon.icns` inside the shipped app
-bundle and resized to 256px. `icons/Elevenpoint.png` is the 256px image from
-`icon.icns` in the installed app. `screenshots/StackMe.webp` is cropped to the app
+bundle and resized to 256px. `icons/Elevenpoint.png` is the magnifier mark (`app-icon.icon` in
+the Elevenpoint repo) exported with Icon Composer's `ictool` at 208px and
+centred on a 256px canvas, which gives it the same 24px inset as StackMe's.
+
+`screenshots/Elevenpoint/` was captured from the 0.1.8 build running on a
+fresh profile (`--user-data-dir`) with only the bundled sample project, so no
+client sites or license details show. The window was 1200 by 800 points,
+captured with `screencapture -o -l <window id>` (no shadow) and scaled to
+2000px WebP. `screenshots/StackMe.webp` is cropped to the app
 window itself, with the capture's own matte and drop shadow removed so the page
 supplies the radius, border and shadow instead. WebP took it from 348 KB to
 59 KB with no visible cost to the UI text.
