@@ -1,7 +1,9 @@
 // Renders a download entry for every public "<Name>-releases" repo owned by the
-// GitHub user below. Each of those repos publishes a Sparkle appcast on GitHub
-// Pages, which already carries the version, date, size and release notes, so no
-// per-project configuration lives in this repo.
+// GitHub user below. Most of those repos publish a Sparkle appcast on GitHub
+// Pages, which already carries the version, date, size and release notes; one
+// without an appcast (an Electron app, which updates from GitHub Releases) is
+// read from its releases instead. Either way no per-project configuration
+// lives in this repo.
 
 const GITHUB_USER = "portseif";
 const RELEASES_SUFFIX = "-releases";
@@ -13,11 +15,13 @@ const MAX_RELEASE_NOTES = 5;
 // load of this page spent one, so a few reloads (or a shared office network)
 // ran it dry and the page showed nothing. The list of apps changes about never,
 // so it's kept in the browser for an hour, and when the API refuses — a rate
-// limit, an outage — the last copy is used whatever its age. Up here because
-// main() runs before the rest of the file: a constant declared further down is
-// still uninitialised when it first reads the cache.
-const REPOS_CACHE_KEY = "release-repos.v1";
-const REPOS_CACHE_FRESH_MS = 60 * 60 * 1000;
+// limit, an outage — the last copy is used whatever its age. The same goes for
+// the releases of an app without an appcast. Up here because main() runs
+// before the rest of the file: a constant declared further down is still
+// uninitialised when it first reads the cache.
+const REPOS_CACHE_KEY = "release-repos.v2";
+const RELEASES_CACHE_PREFIX = "releases.v1:";
+const API_CACHE_FRESH_MS = 60 * 60 * 1000;
 
 // Lucide's arrow-down-to-line, stroked at 2.5 to sit at the same weight as the
 // other icons on the page rather than Lucide's own 2. It ships the shaft, the
@@ -101,28 +105,59 @@ async function main() {
   wireScreenshotStacks();
 }
 
-async function fetchReleaseRepos() {
-  const cached = readCachedRepos();
-  if (cached && Date.now() - cached.savedAt < REPOS_CACHE_FRESH_MS) return cached.repos;
+function fetchReleaseRepos() {
+  return fetchGitHubCached(
+    `users/${GITHUB_USER}/repos?per_page=100&type=owner`,
+    REPOS_CACHE_KEY,
+    (repos) =>
+      repos
+        .filter((repo) => !repo.fork && !repo.archived && repo.name.endsWith(RELEASES_SUFFIX))
+        // Only what the entries read, so the stored copy stays small.
+        .map(({ name, description, homepage, html_url, default_branch }) => ({
+          name,
+          description,
+          homepage,
+          html_url,
+          default_branch,
+        }))
+  );
+}
+
+// Published releases, newest first, trimmed to what an entry reads.
+function fetchGitHubReleases(repo) {
+  return fetchGitHubCached(
+    `repos/${GITHUB_USER}/${repo.name}/releases?per_page=100`,
+    RELEASES_CACHE_PREFIX + repo.name,
+    (releases) =>
+      releases
+        .filter((release) => !release.draft && !release.prerelease)
+        .map(({ tag_name, published_at, body, assets }) => ({
+          tag_name,
+          published_at,
+          body: body || "",
+          assets: assets.map(({ name, size, browser_download_url }) => ({
+            name,
+            size,
+            browser_download_url,
+          })),
+        }))
+  );
+}
+
+// A GitHub API answer, kept for an hour, and past that whenever the API
+// refuses. `trim` shapes the answer before it is stored.
+async function fetchGitHubCached(path, cacheKey, trim) {
+  const cached = readCache(cacheKey);
+  if (cached && Date.now() - cached.savedAt < API_CACHE_FRESH_MS) return cached.data;
 
   try {
-    const response = await fetch(
-      `https://api.github.com/users/${GITHUB_USER}/repos?per_page=100&type=owner`
-    );
+    const response = await fetch(`https://api.github.com/${path}`);
     if (!response.ok) throw new Error(apiFailureMessage(response));
-    const repos = (await response.json())
-      .filter((repo) => !repo.fork && !repo.archived && repo.name.endsWith(RELEASES_SUFFIX))
-      // Only what the entries read, so the stored copy stays small.
-      .map(({ name, description, html_url, default_branch }) => ({
-        name,
-        description,
-        html_url,
-        default_branch,
-      }));
-    writeCachedRepos(repos);
-    return repos;
+    const data = trim(await response.json());
+    writeCache(cacheKey, data);
+    return data;
   } catch (error) {
-    if (cached) return cached.repos;
+    if (cached) return cached.data;
     throw error;
   }
 }
@@ -143,51 +178,32 @@ function apiFailureMessage(response) {
 
 // Storage can be off (a private window, blocked site data), so both sides
 // treat a failure as no cache.
-function readCachedRepos() {
+function readCache(cacheKey) {
   try {
-    const stored = JSON.parse(localStorage.getItem(REPOS_CACHE_KEY));
-    return Array.isArray(stored?.repos) && typeof stored.savedAt === "number" ? stored : null;
+    const stored = JSON.parse(localStorage.getItem(cacheKey));
+    return Array.isArray(stored?.data) && typeof stored.savedAt === "number" ? stored : null;
   } catch {
     return null;
   }
 }
 
-function writeCachedRepos(repos) {
+function writeCache(cacheKey, data) {
   try {
-    localStorage.setItem(REPOS_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), repos }));
+    localStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), data }));
   } catch {}
 }
 
-// Reads one repo's appcast and folds it together with the repo metadata.
-// Returns null when the repo has no readable appcast, so a half-published
-// project never breaks the page.
+// Reads one repo's latest release, from its appcast or else its GitHub
+// Releases, and folds it together with the repo metadata. Returns null when
+// neither yields a download, so a half-published project never breaks the page.
 async function loadProject(repo) {
   const repoPagesUrl = `${PAGES_ORIGIN}/${repo.name}`;
-  let appcast;
-  try {
-    const response = await fetch(`${repoPagesUrl}/appcast.xml`, { cache: "no-cache" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    appcast = new DOMParser().parseFromString(await response.text(), "application/xml");
-    if (appcast.querySelector("parsererror")) throw new Error("malformed appcast");
-  } catch (error) {
-    console.warn(`Skipping ${repo.name}: ${error.message}`);
-    return null;
-  }
+  const release =
+    (await readAppcastRelease(repo, repoPagesUrl)) || (await readGitHubRelease(repo));
+  if (!release) return null;
 
-  const latestItem = findLatestItem(appcast);
-  if (!latestItem) return null;
-
-  const enclosure = latestItem.querySelector("enclosure");
-  const downloadUrl = enclosure?.getAttribute("url");
-  if (!downloadUrl) return null;
-
-  const publishedText = latestItem.querySelector("pubDate")?.textContent?.trim();
-  const publishedDate = publishedText ? new Date(publishedText) : null;
-  const hasPublishedDate = Boolean(publishedDate && !isNaN(publishedDate));
-
-  const name =
-    appcast.querySelector("channel > title")?.textContent?.trim() ||
-    repo.name.slice(0, -RELEASES_SUFFIX.length);
+  const hasPublishedDate = Boolean(release.publishedDate && !isNaN(release.publishedDate));
+  const name = release.name || repo.name.slice(0, -RELEASES_SUFFIX.length);
 
   // Both artwork slots prefer a file published alongside the release, so a new
   // app needs no change here, and fall back to one committed to this repo.
@@ -199,22 +215,161 @@ async function loadProject(repo) {
   ]);
 
   return {
+    ...release,
     name,
     description: repo.description || "",
+    releasedAt: hasPublishedDate ? release.publishedDate : new Date(0),
+    hasPublishedDate,
+    icon,
+    screenshots,
+    repoUrl: repo.html_url,
+  };
+}
+
+// The newest item in the repo's Sparkle appcast on Pages, or null when there
+// is no readable appcast (an app that updates some other way).
+async function readAppcastRelease(repo, repoPagesUrl) {
+  let appcast;
+  try {
+    const response = await fetch(`${repoPagesUrl}/appcast.xml`, { cache: "no-cache" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    appcast = new DOMParser().parseFromString(await response.text(), "application/xml");
+    if (appcast.querySelector("parsererror")) throw new Error("malformed appcast");
+  } catch (error) {
+    console.info(`No appcast for ${repo.name} (${error.message}), trying its releases`);
+    return null;
+  }
+
+  const latestItem = findLatestItem(appcast);
+  if (!latestItem) return null;
+
+  const enclosure = latestItem.querySelector("enclosure");
+  const downloadUrl = enclosure?.getAttribute("url");
+  if (!downloadUrl) return null;
+
+  const publishedText = latestItem.querySelector("pubDate")?.textContent?.trim();
+
+  return {
+    name: appcast.querySelector("channel > title")?.textContent?.trim() || "",
     version:
       sparkleText(latestItem, "shortVersionString") || sparkleText(latestItem, "version") || "",
     minimumSystemVersion: sparkleText(latestItem, "minimumSystemVersion"),
     downloadUrl,
+    downloadIsPage: false,
     downloadBytes: Number(enclosure.getAttribute("length")) || 0,
     releaseNotes: extractReleaseNotes(latestItem.querySelector("description")?.textContent || ""),
-    releasedAt: hasPublishedDate ? publishedDate : new Date(0),
-    hasPublishedDate,
-    icon,
-    screenshots,
+    // Sparkle notes lead with a verb, which is what the Added/Fixed split reads.
+    notesLeadWithVerb: true,
+    publishedDate: publishedText ? new Date(publishedText) : null,
     changelogUrl: `${repo.html_url}/blob/${repo.default_branch}/CHANGELOG.md`,
     changelogSource: `${repoPagesUrl}/CHANGELOG.md`,
-    repoUrl: repo.html_url,
   };
+}
+
+// The newest GitHub Release with a Mac disk image, for an app that updates
+// from GitHub Releases (electron-updater) rather than an appcast. Releases
+// without a .dmg (a zip-only build, server binaries) are not a Mac download,
+// so a repo with none of them stays off the page.
+//
+// Download goes to the repo's website when it has one, which is how an app
+// with an Apple silicon and an Intel build sends people to a page that offers
+// both; otherwise to the Apple silicon .dmg, then any .dmg. The history comes
+// from the same answer, so the changelog panel costs no extra request.
+async function readGitHubRelease(repo) {
+  let releases;
+  try {
+    releases = await fetchGitHubReleases(repo);
+  } catch (error) {
+    console.warn(`Skipping ${repo.name}: ${error.message}`);
+    return null;
+  }
+
+  const diskImageOf = (release) =>
+    release.assets.find((asset) => /-arm64\.dmg$/i.test(asset.name)) ||
+    release.assets.find((asset) => /\.dmg$/i.test(asset.name));
+  const latest = releases.find(diskImageOf);
+  if (!latest) {
+    console.warn(`Skipping ${repo.name}: no appcast and no release with a .dmg`);
+    return null;
+  }
+
+  const versionOf = (release) => release.tag_name.replace(/^v(?=\d)/i, "");
+  const notesOf = (release) =>
+    releaseNotesFromMarkdown(
+      release.body,
+      release.assets.map((asset) => asset.name)
+    );
+
+  const diskImage = diskImageOf(latest);
+  const version = versionOf(latest);
+
+  return {
+    // electron-builder names its files "<productName>-<version>…", which is
+    // the app's own capitalisation rather than the repo's.
+    name: diskImage.name.includes(`-${version}`) ? diskImage.name.split(`-${version}`)[0] : "",
+    version,
+    minimumSystemVersion: "",
+    downloadUrl: repo.homepage || diskImage.browser_download_url,
+    downloadIsPage: Boolean(repo.homepage),
+    downloadBytes: diskImage.size || 0,
+    releaseNotes: notesOf(latest).slice(0, MAX_RELEASE_NOTES),
+    notesLeadWithVerb: false,
+    publishedDate: latest.published_at ? new Date(latest.published_at) : null,
+    changelogUrl: `${repo.html_url}/releases`,
+    changelog: releases
+      .map((release) => ({
+        label: versionOf(release),
+        date: release.published_at || "",
+        notes: notesOf(release),
+      }))
+      .filter((release) => release.notes.length > 0),
+  };
+}
+
+// A release's notes from the Markdown GitHub shows. These are written as a
+// line or two of summary, the changes as a list, then a list of which file to
+// download for which computer. That download list is the first one naming one
+// of the release's own files; it, the line leading into it ("Pick the file
+// for your computer:") and everything after are left out. What comes before
+// it is the notes: each paragraph one note, since a summary line is what makes
+// the bullets under it make sense, and each bullet one note.
+function releaseNotesFromMarkdown(markdown, assetNames) {
+  const blocks = markdown
+    .replace(/\r\n?/g, "\n")
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  const bulletText = (line) => line.match(/^[-*]\s+(.*)$/)?.[1];
+  const isList = (block) => bulletText(block.split("\n")[0]) !== undefined;
+  // A wrapped bullet's later lines belong to it.
+  const listItems = (block) =>
+    block.split("\n").reduce((items, line) => {
+      const bullet = bulletText(line.trim());
+      if (bullet !== undefined) items.push(bullet);
+      else if (items.length) items[items.length - 1] += ` ${line.trim()}`;
+      return items;
+    }, []);
+
+  let end = blocks.findIndex(
+    (block) => isList(block) && assetNames.some((name) => block.includes(name))
+  );
+  if (end === -1) end = blocks.length;
+  else if (end > 0 && !isList(blocks[end - 1]) && blocks[end - 1].endsWith(":")) end -= 1;
+
+  return blocks
+    .slice(0, end)
+    .flatMap((block) => (isList(block) ? listItems(block) : [block.replace(/\s*\n\s*/g, " ")]))
+    .map(markdownToText)
+    .filter(Boolean);
+}
+
+// Notes render as text, so links keep their words and emphasis loses its marks.
+function markdownToText(markdown) {
+  return markdown
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\*\*|__|`/g, "")
+    .trim();
 }
 
 // Appcast items are not required to be in order, so pick the highest version
@@ -294,7 +449,11 @@ function buildProjectEntry(project, index) {
             : ""
         }
         <p class="actions">
-          <a class="download" href="${escapeHtml(project.downloadUrl)}">${DOWNLOAD_ICON}Download for macOS</a>
+          <a class="download" href="${escapeHtml(project.downloadUrl)}"${
+            // A download page is a navigation off the site, so it opens in a
+            // new tab like every other external link. A file download does not.
+            project.downloadIsPage ? ` target="_blank" rel="noopener noreferrer"` : ""
+          }>${DOWNLOAD_ICON}Download for macOS</a>
           <button class="link-arrow" type="button" data-changelog="${escapeHtml(project.name)}">
             Full changelog${CHEVRON_ICON}
           </button>
@@ -395,11 +554,18 @@ function splitReleaseNotes(notes) {
 function renderWhatsNew(project) {
   if (!project.releaseNotes.length) return "";
 
-  const { added, fixed } = splitReleaseNotes(project.releaseNotes);
-  const column = (label, notes, icon) =>
+  // Notes written as prose ("In Findings, the Select button stays in view")
+  // have no opening verb to sort by, so they stay one unlabelled group rather
+  // than all landing under Added.
+  const { added, fixed } = project.notesLeadWithVerb
+    ? splitReleaseNotes(project.releaseNotes)
+    : { added: project.releaseNotes, fixed: [] };
+  const label = (text) =>
+    project.notesLeadWithVerb ? `<h4 class="whats-new-label">${text}</h4>` : "";
+  const column = (heading, notes, icon) =>
     notes.length
       ? `<section class="whats-new-group">
-           <h4 class="whats-new-label">${label}</h4>
+           ${label(heading)}
            <ul class="note-card">
              ${notes.map((note) => `<li>${icon}<span>${escapeHtml(note)}</span></li>`).join("")}
            </ul>
@@ -430,7 +596,7 @@ function renderWhatsNew(project) {
         </button>
       </header>
       <div class="whats-new-columns">
-        ${column("Added", added, PLUS_ICON)}
+        ${column("Added", added, project.notesLeadWithVerb ? PLUS_ICON : "")}
         ${column("Fixed", fixed, WRENCH_ICON)}
       </div>
     </section>`;
@@ -588,6 +754,12 @@ async function openChangelog(projectName, trigger) {
   changelogDialog.showModal();
   changelogBody.scrollTop = 0;
   updateChangelogEdges();
+
+  // An app read from GitHub Releases already has its history.
+  if (project.changelog) {
+    renderChangelog(project.changelog);
+    return;
+  }
 
   if (changelogCache.has(projectName)) {
     renderChangelog(changelogCache.get(projectName));

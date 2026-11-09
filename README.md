@@ -14,6 +14,29 @@ few release-note bullets straight out of the Sparkle feed.
 So publishing a new app means creating a `<Name>-releases` repo with Pages
 enabled and an `appcast.xml` at its root. Nothing here needs editing.
 
+An app that updates from GitHub Releases instead (Elevenpoint, an Electron
+app on electron-updater) has no appcast, so when `appcast.xml` 404s the page
+reads the repo's releases from the API:
+
+- the newest published release with a `.dmg` is the one shown, so a repo
+  whose releases carry no disk image (Wheelhouse's zip) stays off the page
+- the name comes from the `.dmg` file name, `<productName>-<version>…`, and
+  the size from the Apple silicon `.dmg` when there is one
+- **Download** goes to the repo's website (the Website field on GitHub) when
+  it has one, opening in a new tab since it's a page, not a file. That's how
+  an app with separate Apple silicon and Intel builds sends people to a page
+  offering both. Without one it's the `.dmg` itself.
+- the notes are the release body up to the download list, the first list
+  naming one of the release's files, minus the line leading into it. Each
+  paragraph and each bullet is one note. They're prose rather than verb-led,
+  so "What's new" shows them as one unlabelled card instead of splitting
+  them into Added and Fixed.
+- the changelog panel is built from every release in the same answer, so it
+  costs no request of its own, and its GitHub link goes to the releases page
+
+That's one more API call per such repo, kept in `localStorage` for an hour
+the same way as the repo list.
+
 GitHub allows 60 API calls an hour per IP address without a token, so the repo
 list is kept in `localStorage` for an hour, and when the API refuses (a spent
 limit, an outage) the last copy is used whatever its age. A new app can take
@@ -57,7 +80,8 @@ image's intrinsic size, so the markup reserves exactly the right space for any
 aspect ratio and nothing shifts as it loads.
 
 `icons/StackMe.png` was extracted from `AppIcon.icns` inside the shipped app
-bundle and resized to 256px. `screenshots/StackMe.webp` is cropped to the app
+bundle and resized to 256px. `icons/Elevenpoint.png` is the 256px image from
+`icon.icns` in the installed app. `screenshots/StackMe.webp` is cropped to the app
 window itself, with the capture's own matte and drop shadow removed so the page
 supplies the radius, border and shadow instead. WebP took it from 348 KB to
 59 KB with no visible cost to the UI text.
