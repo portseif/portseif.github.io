@@ -14,24 +14,34 @@ few release-note bullets straight out of the Sparkle feed.
 So publishing a new app means creating a `<Name>-releases` repo with Pages
 enabled and an `appcast.xml` at its root. Nothing here needs editing.
 
+An open source app (Skills Buddy) needs no second repo: its own public repo
+carries the releases, and the `macos-app` topic on that repo is what puts it
+on the page. It's read from GitHub Releases the same way as below. When the
+repo has a license, the entry gets an "Open source" tag beside the name.
+
 An app that updates from GitHub Releases instead (Elevenpoint, an Electron
 app on electron-updater) has no appcast, so when `appcast.xml` 404s the page
 reads the repo's releases from the API:
 
 - the newest published release with a `.dmg` is the one shown, so a repo
   whose releases carry no disk image (Wheelhouse's zip) stays off the page
-- the name comes from the `.dmg` file name, `<productName>-<version>…`, and
-  the size from the Apple silicon `.dmg` when there is one
+- the name comes from the release title with the version taken off ("Skills
+  Buddy 0.1.2"), or when the title is only the version, from the `.dmg` file
+  name, `<productName>-<version>…`. The size comes from the Apple silicon
+  `.dmg` when there is one.
 - **Requires** says "any OS" when the release also carries a Windows or Linux
   installer (`.exe`, `.msi`, `.AppImage`, `.deb`, `.rpm`). A `.dmg` alone says
-  nothing about the macOS it needs, so then the row is left out.
+  nothing about the macOS it needs, so then it comes from the notes ("runs on
+  macOS 15 or later"), and the row is left out when they don't say.
 - **Download** goes to the repo's website (the Website field on GitHub) when
   it has one, opening in a new tab since it's a page, not a file. That's how
   an app with separate Apple silicon and Intel builds sends people to a page
   offering both. Without one it's the `.dmg` itself.
 - the notes are the release body up to the download list, the first list
-  naming one of the release's files, minus the line leading into it. Each
-  paragraph and each bullet is one note in the changelog. In "What's new" the
+  naming one of the release's files, minus the line leading into it. A
+  paragraph naming one of the files ("Download `Skills-Buddy-0.1.2.dmg`
+  below…") is left out too, wherever it sits. Each remaining paragraph and
+  each bullet is one note in the changelog. In "What's new" the
   summary paragraph sits under the heading and the bullets are split into
   Added and Fixed. They're sentences rather than verb-led, so besides the
   opening verb the split looks for how a repair describes the old behaviour:
@@ -96,6 +106,10 @@ aspect ratio and nothing shifts as it loads.
 bundle and resized to 256px. `icons/Elevenpoint.png` is the magnifier mark (`app-icon.icon` in
 the Elevenpoint repo) exported with Icon Composer's `ictool` at 208px and
 centred on a 256px canvas, which gives it the same 24px inset as StackMe's.
+`icons/Skills Buddy.png` is `icon-256.png` from the app's own asset catalog,
+already inset 25px. Skills Buddy has no Pages site, so its artwork lives here,
+named with the space, and its one shot (`screenshots/Skills Buddy/`) is the
+hero image from its README, half light and half dark.
 
 `screenshots/Elevenpoint/` was captured from the 0.1.8 build running on a
 fresh profile (`--user-data-dir`) with only the bundled sample project, so no
@@ -123,6 +137,9 @@ supplies the radius, border and shadow instead. WebP took it from 348 KB to
   content scrolls under, with a soft gradient at its bottom edge instead of a
   hairline. `prefers-reduced-transparency` swaps it for a solid bar with a
   border, and `prefers-contrast: more` solidifies the hairlines.
+- **The open source tag is a label, not a control.** It takes the spec card's
+  fill with a hairline ring and body-text grey, no accent and no hover, and
+  sits beside the app name, dropping under it when the column is narrow.
 - **Entries are icon plus aligned body.** The icon holds the left edge and
   everything else lines up with the app name, so an entry reads as one block.
   Below 600px the icon stacks above, and below 980px the split collapses.

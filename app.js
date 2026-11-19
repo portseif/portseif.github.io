@@ -1,12 +1,14 @@
 // Renders a download entry for every public "<Name>-releases" repo owned by the
-// GitHub user below. Most of those repos publish a Sparkle appcast on GitHub
-// Pages, which already carries the version, date, size and release notes; one
-// without an appcast (an Electron app, which updates from GitHub Releases) is
-// read from its releases instead. Either way no per-project configuration
-// lives in this repo.
+// GitHub user below, and for every open source app, whose own repo carries its
+// releases and is marked with the APP_TOPIC topic instead. Most of those repos
+// publish a Sparkle appcast on GitHub Pages, which already carries the
+// version, date, size and release notes; one without an appcast (an Electron
+// app, or an open source app with only GitHub Releases) is read from its
+// releases instead. Either way no per-project configuration lives in this repo.
 
 const GITHUB_USER = "portseif";
 const RELEASES_SUFFIX = "-releases";
+const APP_TOPIC = "macos-app";
 const PAGES_ORIGIN = `https://${GITHUB_USER}.github.io`;
 const SPARKLE_NAMESPACE = "http://www.andymatuschak.org/xml-namespaces/sparkle";
 const MAX_RELEASE_NOTES = 5;
@@ -19,8 +21,8 @@ const MAX_RELEASE_NOTES = 5;
 // the releases of an app without an appcast. Up here because main() runs
 // before the rest of the file: a constant declared further down is still
 // uninitialised when it first reads the cache.
-const REPOS_CACHE_KEY = "release-repos.v2";
-const RELEASES_CACHE_PREFIX = "releases.v1:";
+const REPOS_CACHE_KEY = "release-repos.v3";
+const RELEASES_CACHE_PREFIX = "releases.v2:";
 const API_CACHE_FRESH_MS = 60 * 60 * 1000;
 // How many apps the page showed last time, for the loading placeholders. Up
 // here for the same reason: main() reads it before its first await.
@@ -120,14 +122,23 @@ function fetchReleaseRepos() {
     REPOS_CACHE_KEY,
     (repos) =>
       repos
-        .filter((repo) => !repo.fork && !repo.archived && repo.name.endsWith(RELEASES_SUFFIX))
+        .filter(
+          (repo) =>
+            !repo.fork &&
+            !repo.archived &&
+            (repo.name.endsWith(RELEASES_SUFFIX) || repo.topics?.includes(APP_TOPIC))
+        )
         // Only what the entries read, so the stored copy stays small.
-        .map(({ name, description, homepage, html_url, default_branch }) => ({
+        .map(({ name, description, homepage, html_url, default_branch, license }) => ({
           name,
           description,
           homepage,
           html_url,
           default_branch,
+          // A "-releases" repo only carries the builds of a private app. One
+          // listed for its topic is the app's own source, public, and open
+          // source once it carries a license.
+          openSource: !name.endsWith(RELEASES_SUFFIX) && Boolean(license),
         }))
   );
 }
@@ -140,7 +151,8 @@ function fetchGitHubReleases(repo) {
     (releases) =>
       releases
         .filter((release) => !release.draft && !release.prerelease)
-        .map(({ tag_name, published_at, body, assets }) => ({
+        .map(({ name, tag_name, published_at, body, assets }) => ({
+          name: name || "",
           tag_name,
           published_at,
           body: body || "",
@@ -212,7 +224,9 @@ async function loadProject(repo) {
   if (!release) return null;
 
   const hasPublishedDate = Boolean(release.publishedDate && !isNaN(release.publishedDate));
-  const name = release.name || repo.name.slice(0, -RELEASES_SUFFIX.length);
+  const name =
+    release.name ||
+    (repo.name.endsWith(RELEASES_SUFFIX) ? repo.name.slice(0, -RELEASES_SUFFIX.length) : repo.name);
 
   // Both artwork slots prefer a file published alongside the release, so a new
   // app needs no change here, and fall back to one committed to this repo.
@@ -232,6 +246,7 @@ async function loadProject(repo) {
     icon,
     screenshots,
     repoUrl: repo.html_url,
+    openSource: repo.openSource,
   };
 }
 
@@ -320,16 +335,31 @@ async function readGitHubRelease(repo) {
   const bullets = latestNotes.filter((note) => note.bullet).map((note) => note.text);
   const paragraphs = latestNotes.filter((note) => !note.bullet).map((note) => note.text);
 
+  // A release titled "Skills Buddy 0.1.2" names the app as it's written,
+  // spaces and all, once the version is taken off. One titled with only its
+  // version leaves the disk image's name: electron-builder names its files
+  // "<productName>-<version>…", which is the app's own capitalisation rather
+  // than the repo's.
+  const titleName = latest.name
+    .split(/\s+/)
+    .filter((word) => word.replace(/^v(?=\d)/i, "") !== version)
+    .join(" ");
+  const fileName = diskImage.name.includes(`-${version}`)
+    ? diskImage.name.split(`-${version}`)[0]
+    : "";
+  const minimumMacOS = latest.body.match(/\bmacOS (\d+(?:\.\d+)*) or later\b/i)?.[1];
+
   return {
-    // electron-builder names its files "<productName>-<version>…", which is
-    // the app's own capitalisation rather than the repo's.
-    name: diskImage.name.includes(`-${version}`) ? diskImage.name.split(`-${version}`)[0] : "",
+    name: titleName || fileName,
     version,
     // A release that also ships a Windows or Linux installer runs anywhere.
-    // One with only a disk image says nothing about which macOS it needs.
+    // A disk image alone says nothing about which macOS it needs, so that
+    // comes from the notes when they say ("runs on macOS 15 or later").
     requires: latest.assets.some((asset) => /\.(exe|msi|appimage|deb|rpm)$/i.test(asset.name))
       ? "any OS"
-      : "",
+      : minimumMacOS
+        ? `macOS ${minimumMacOS}`
+        : "",
     downloadUrl: repo.homepage || diskImage.browser_download_url,
     downloadIsPage: Boolean(repo.homepage),
     downloadBytes: diskImage.size || 0,
@@ -351,10 +381,12 @@ async function readGitHubRelease(repo) {
 // line or two of summary, the changes as a list, then a list of which file to
 // download for which computer. That download list is the first one naming one
 // of the release's own files; it, the line leading into it ("Pick the file
-// for your computer:") and everything after are left out. What comes before
-// it is the notes: each paragraph one note, since a summary line is what makes
-// the bullets under it make sense, and each bullet one note, in order and
-// marked as which they are.
+// for your computer:") and everything after are left out. An app with one
+// file says where to get it in a paragraph instead ("Download
+// `Skills-Buddy-0.1.2.dmg` below, …"), and any paragraph naming a file is
+// left out too, wherever it sits. What remains is the notes: each paragraph
+// one note, since a summary line is what makes the bullets under it make
+// sense, and each bullet one note, in order and marked as which they are.
 function releaseNotesFromMarkdown(markdown, assetNames) {
   const blocks = markdown
     .replace(/\r\n?/g, "\n")
@@ -381,6 +413,7 @@ function releaseNotesFromMarkdown(markdown, assetNames) {
 
   return blocks
     .slice(0, end)
+    .filter((block) => isList(block) || !assetNames.some((name) => block.includes(name)))
     .flatMap((block) =>
       isList(block)
         ? listItems(block).map((text) => ({ text: markdownToText(text), bullet: true }))
@@ -468,7 +501,10 @@ function buildProjectEntry(project, index) {
           : ""
       }
       <div class="project-body">
-        <h2 class="project-name">${escapeHtml(project.name)}</h2>
+        <div class="project-heading">
+          <h2 class="project-name">${escapeHtml(project.name)}</h2>
+          ${project.openSource ? `<span class="project-tag">Open source</span>` : ""}
+        </div>
         ${
           project.description
             ? `<p class="project-description">${escapeHtml(project.description)}</p>`

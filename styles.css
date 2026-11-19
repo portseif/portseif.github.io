@@ -535,6 +535,31 @@ body {
   font-weight: 680;
 }
 
+/* The name and, for an app whose source is public, a tag saying so. The tag
+   sits beside the name and drops under it when the column is too narrow. */
+.project-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.875rem;
+}
+
+/* A label rather than a control, so no accent (that stays with Download) and
+   no hover. The spec card's quiet fill, ringed with a hairline that turns
+   solid under prefers-contrast: more along with every other hairline. */
+.project-tag {
+  padding: 0.3125rem 0.6875rem;
+  border-radius: var(--radius-pill);
+  background: var(--card-fill);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--text-body);
+  font-size: 0.8125rem;
+  font-weight: 560;
+  line-height: 1.2;
+  letter-spacing: 0.01em; /* small text: a touch of positive tracking */
+  white-space: nowrap;
+}
+
 .project-body {
   display: grid;
   justify-items: start;
