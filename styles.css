@@ -235,6 +235,22 @@ body {
   }
 }
 
+/* The name and three links need about 416px. Narrower than that, the name
+   broke onto two lines and at 360px the links ran off the edge, so the header
+   drops Upwork, the link a visitor least needs up here (the footer still has
+   it), and closes its gaps enough to keep the name on one line down to 320px.
+   The footer's four links take the same gap, which keeps them inside the
+   page's margin at 320px. */
+@media (max-width: 27rem) {
+  .chrome-inner,
+  .chrome-links {
+    gap: 0.875rem;
+  }
+  .chrome .wide-only {
+    display: none;
+  }
+}
+
 /* --- Page --- */
 .page {
   max-width: 76rem;

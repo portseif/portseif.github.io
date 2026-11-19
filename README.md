@@ -136,7 +136,9 @@ supplies the radius, border and shadow instead. WebP took it from 348 KB to
 - **Translucent chrome.** The header is a `backdrop-filter` material that
   content scrolls under, with a soft gradient at its bottom edge instead of a
   hairline. `prefers-reduced-transparency` swaps it for a solid bar with a
-  border, and `prefers-contrast: more` solidifies the hairlines.
+  border, and `prefers-contrast: more` solidifies the hairlines. It links to
+  portseif.io, GitHub and Upwork; below 432px it drops Upwork (the footer
+  still has it) so my name stays on one line beside the other two.
 - **The open source tag is a label, not a control.** It takes the spec card's
   fill with a hairline ring and body-text grey, no accent and no hover, and
   sits beside the app name, dropping under it when the column is narrow.
